@@ -84,14 +84,40 @@ def describe(m):
     return f"{m.get('tipoNombre', '')}{extra} · {eur(m.get('importe'))}"
 
 
-def avisar_multas():
-    nuevas = list(db.collection("multas").where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
-    if not nuevas:
-        print("No hay multas nuevas")
-        return
-    multas = [d.to_dict() for d in nuevas]
-    mensajes = []
+LEGACY_TEAM = "ONTINYENT"  # móviles registrados antes de haber varios equipos
+
+
+def tokens_by_team():
+    by = {}
     for tok, info in all_tokens():
+        by.setdefault(info.get("equipo") or LEGACY_TEAM, []).append((tok, info))
+    return by
+
+
+def avisar_multas():
+    toks_team = None
+    total = 0
+    for team in db.collection("equipos").stream():
+        nuevas = list(team.reference.collection("multas")
+                      .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
+        if not nuevas:
+            continue
+        total += len(nuevas)
+        if toks_team is None:
+            toks_team = tokens_by_team()
+        nombre = (team.to_dict() or {}).get("nombre", "")
+        avisar_equipo(nombre, [d.to_dict() for d in nuevas], toks_team.get(team.id, []))
+        batch = db.batch()
+        for d in nuevas:
+            batch.update(d.reference, {"notificada": True})
+        batch.commit()
+    if not total:
+        print("No hay multas nuevas")
+
+
+def avisar_equipo(nombre, multas, tokens):
+    mensajes = []
+    for tok, info in tokens:
         uid, jug = info.get("uid", ""), info.get("jugador", "")
         mias = [m for m in multas if jug and m.get("jugador") == jug]
         if info.get("solo_mias") and not mias:
@@ -115,12 +141,10 @@ def avisar_multas():
                 por[n] = por.get(n, 0) + float(m.get("importe") or 0)
             title = f"{len(multas)} multas nuevas"
             body = ", ".join(f"{n} {eur(v)}" for n, v in sorted(por.items(), key=lambda x: -x[1]))
+        if nombre:
+            title += f" · {nombre}"
         mensajes.append((tok, title, body[:200]))
     send_each(mensajes)
-    batch = db.batch()
-    for d in nuevas:
-        batch.update(d.reference, {"notificada": True})
-    batch.commit()
 
 
 def send_each(mensajes, data=None, view="historial"):
@@ -144,9 +168,14 @@ def send_each(mensajes, data=None, view="historial"):
 
 
 def avisar_viernes():
-    toks = [t for t, info in all_tokens() if info.get("viernes", True)]
+    """Solo a los equipos que tienen activado el recordatorio del viernes."""
+    activos = {t.id for t in db.collection("equipos").stream() if (t.to_dict() or {}).get("viernes")}
+    toks = [tok for team, lst in tokens_by_team().items() if team in activos
+            for tok, info in lst if info.get("viernes", True)]
     if toks:
         send(toks, "Tiro de medio campo", "Hoy es viernes: el último en meter paga 2 €.", {"tipo": "viernes"}, view="anadir")
+    else:
+        print("Nadie a quien recordar")
 
 
 if __name__ == "__main__":

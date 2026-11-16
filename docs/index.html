@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Multas Caixa Ontinyent</title>
-<meta name="description" content="Multas del equipo Caixa Ontinyent">
+<title>Multas del equipo</title>
+<meta name="description" content="Lleva las multas de tu equipo: quién debe qué, el bote y avisos al móvil">
 <meta name="theme-color" content="#29297a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=2">
@@ -19,8 +19,8 @@
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="crest"><img src="icons/escudo-128.png" alt="Escudo del Ontinyent Club de Bàsquet" width="38" height="48"></div>
-  <div class="brand"><b>Multas</b><span>Caixa Ontinyent</span></div>
+  <div class="crest"><img id="crestImg" src="icons/balon.png" alt="" width="48" height="48"></div>
+  <div class="brand"><b>Multas</b><span id="teamName">Del equipo</span></div>
   <div class="pot"><small id="potLabel">Bote</small><strong id="potTotal">0 €</strong></div>
 </div></header>
 
@@ -31,16 +31,43 @@
   <p class="note">Abre <b>firebase-config.js</b> y pega los datos de tu proyecto de Firebase. Los pasos están en GUIA.md.</p></div>
 </div></section>
 
+<!-- INICIO: elegir o crear equipo -->
+<section id="v-inicio" class="view" hidden><div class="wrap">
+  <div><h2>Multas del equipo</h2><p class="sub">Apunta las multas de tu equipo, mira quién debe qué y recibe avisos en el móvil. Gratis.</p></div>
+  <div id="migrateCard" class="card" hidden>
+    <h3>Tu equipo de antes</h3>
+    <p class="note">La app ahora admite varios equipos. Pasa los jugadores, multas y ajustes del Caixa Ontinyent al sistema nuevo. No se pierde nada.</p>
+    <button type="button" class="btn" id="migrateBtn">Pasar Caixa Ontinyent al sistema nuevo</button>
+  </div>
+  <div id="myTeamsCard" class="card" hidden><h3>Tus equipos</h3><div id="myTeams"></div></div>
+  <form id="joinForm" class="card" novalidate>
+    <h3>Entrar en un equipo</h3>
+    <p class="note">Pega el enlace o escribe el código que te ha pasado tu equipo.</p>
+    <div class="row"><label class="f">Código o enlace<input type="text" id="joinCode" autocapitalize="characters" autocomplete="off" placeholder="Ej.: K7M2QX"></label><button type="submit" class="btn">Entrar</button></div>
+  </form>
+  <div class="card">
+    <h3>Crear un equipo nuevo</h3>
+    <div id="createLogin" style="display:flex;flex-direction:column;gap:10px">
+      <p class="note">Para crear un equipo necesitas una cuenta. Serás su administrador.</p>
+      <label class="f">Correo<input type="text" id="cEmail" autocomplete="username" inputmode="email" autocapitalize="off"></label>
+      <label class="f">Contraseña<input type="password" id="cPass" autocomplete="current-password" class="pw"></label>
+      <div class="row"><button type="button" class="btn" id="cIn">Entrar</button><button type="button" class="btn ghost" id="cNew">Crear cuenta</button></div>
+    </div>
+    <form id="createForm" novalidate hidden style="display:flex;flex-direction:column;gap:10px">
+      <p class="note"><span id="createWho"></span> <button type="button" class="btn small ghost" id="cOut">Salir</button></p>
+      <label class="f">Nombre del equipo<input type="text" id="ctName" maxlength="60" placeholder="Ej.: Sènior B"></label>
+      <label class="f">Quién lleva el conteo (opcional)<input type="text" id="ctCount" maxlength="40"></label>
+      <label class="switch note"><span>Añadir multas de ejemplo (tarde al entreno, técnica, expulsión…). Luego se pueden cambiar.</span><input type="checkbox" id="ctSample" checked></label>
+      <button type="submit" class="btn" id="ctBtn">Crear equipo</button>
+    </form>
+  </div>
+</div></section>
+
 <!-- RESUMEN -->
 <section id="v-resumen" class="view"><div class="wrap">
   <div id="installBanner" class="info" hidden></div>
   <div id="fridayBanner" class="banner" hidden><p>Hoy es viernes: tiro de medio campo. El último paga 2 €.</p><button type="button" id="fridayBtn">Apuntar al último</button></div>
   <div id="status" class="info" hidden></div>
-  <div id="setupCard" class="card" hidden>
-    <h3>Primer arranque</h3>
-    <p class="note">Todavía no hay equipo creado. Al configurarlo serás el primer administrador y se cargarán la plantilla y las multas del grupo.</p>
-    <button type="button" class="btn" id="setupBtn">Configurar el equipo</button>
-  </div>
   <div id="meCard" class="card" hidden></div>
   <div>
     <h2>Clasificación de multas</h2>
@@ -105,13 +132,27 @@
 
 <!-- AJUSTES -->
 <section id="v-ajustes" class="view" hidden><div class="wrap">
-  <div><h2>Ajustes</h2><p class="sub">Cuenta, periodo del conteo, tipos de multa y avisos.</p></div>
+  <div><h2>Ajustes</h2><p class="sub">Equipo, cuenta, periodo del conteo, tipos de multa y avisos.</p></div>
+
+  <div class="card" id="teamCard">
+    <h3>Tu equipo</h3>
+    <div class="who-line"><span><b id="tcName"></b><br><span class="note">Código: <b id="tcCode" class="code"></b></span></span><img id="tcCrest" src="icons/balon.png" alt="" height="48" style="height:48px;width:auto"></div>
+    <p class="note">Pasa este enlace a tus compañeros para que entren en el equipo:</p>
+    <input type="text" id="tcLink" readonly aria-label="Enlace del equipo">
+    <div class="row"><button type="button" class="btn small" id="copyLink">Copiar enlace</button><button type="button" class="btn small ghost" id="copyInvite">Copiar invitación para WhatsApp</button></div>
+    <div id="teamAdmin" class="stack" hidden>
+      <div class="row"><label class="f">Nombre del equipo<input type="text" id="tcNameIn" maxlength="60"></label><button type="button" class="btn small" id="tcNameSave">Guardar</button></div>
+      <div class="row"><label class="f">Escudo (imagen PNG o JPG)<input type="file" id="tcFile" accept="image/*"></label><button type="button" class="btn small ghost" id="tcCrestDel">Quitar escudo</button></div>
+      <label class="switch"><span>Recordatorio del tiro de medio campo los viernes (para todo el equipo)</span><input type="checkbox" id="tcFri"></label>
+    </div>
+    <button type="button" class="btn small ghost" id="switchTeam">Cambiar de equipo o crear otro</button>
+  </div>
 
   <div class="card" id="accountCard">
     <h3>Cuenta</h3>
     <div id="accountOut" class="who-line"></div>
     <form id="loginForm" novalidate style="display:flex;flex-direction:column;gap:10px">
-      <p class="note">Sin entrar puedes ver las multas. Para apuntarlas, entra con una cuenta que un administrador haya autorizado.</p>
+      <p class="note">Sin cuenta puedes ver las multas. Con cuenta puedes vincularte a tu nombre, y si eres administrador, apuntarlas.</p>
       <label class="f">Correo<input type="text" id="lEmail" autocomplete="username" inputmode="email" autocapitalize="off"></label>
       <label class="f">Contraseña<input type="password" id="lPass" autocomplete="current-password" style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;width:100%;font-size:16px"></label>
       <div class="row">
@@ -158,7 +199,7 @@
     <div class="who-line"><span id="pushState" class="note">Notificaciones del móvil: desactivadas</span><button type="button" class="btn small" id="pushBtn">Activar notificaciones</button></div>
     <label class="switch" id="nMineWrap" hidden><span>Avisarme solo de mis multas</span><input type="checkbox" id="nMine"></label>
     <label class="switch"><span>Avisarme dentro de la app cuando alguien apunte una multa</span><input type="checkbox" id="nLive"></label>
-    <label class="switch"><span>Recordatorio del tiro de medio campo los viernes</span><input type="checkbox" id="nFri"></label>
+    <label class="switch" id="nFriWrap" hidden><span>Recordatorio del tiro de medio campo los viernes</span><input type="checkbox" id="nFri"></label>
     <p class="note">Las notificaciones del móvil llegan aunque la app esté cerrada. En iPhone primero hay que instalar la app en la pantalla de inicio (iOS 16.4 o posterior).</p>
   </div>
 </div></section>

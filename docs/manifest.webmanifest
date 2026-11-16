@@ -1,9 +1,8 @@
 {
-  "name": "Multas Caixa Ontinyent",
+  "name": "Multas del equipo",
   "short_name": "Multas",
-  "description": "Multas del equipo Caixa Ontinyent",
+  "description": "Multas del equipo",
   "lang": "es",
-  "start_url": "./#resumen",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

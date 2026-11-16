@@ -1,4 +1,4 @@
-// Multas Caixa Ontinyent — app web instalable (Firebase, plan gratuito)
+// Multas del equipo — app web instalable para varios equipos (Firebase, plan gratuito)
 const V = "10.12.2";
 const CFG = self.FIREBASE_CONFIG || {};
 const $ = s => document.querySelector(s);
@@ -31,24 +31,30 @@ const store = {
   get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:JSON.parse(v); }catch{ return d; } },
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
 };
+/* ---------- equipo ---------- */
+const LEGACY_TEAM = "ONTINYENT";
+const CODE_ABC = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const genCode = () => { const a=new Uint32Array(6); crypto.getRandomValues(a); return [...a].map(n=>CODE_ABC[n%CODE_ABC.length]).join(""); };
+const cleanCode = v => { v=String(v||"").trim(); const m=v.match(/[?&]e=([A-Za-z0-9]+)/); if(m) v=m[1]; return v.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,20); };
+const legacyDevice = ["multas.lastSeen","multas.pushToken","multas.prefs","multas.hideInstall"].some(k=>{ try{ return localStorage.getItem(k)!==null; }catch{ return false; } });
+let TEAM = cleanCode(new URLSearchParams(location.search).get("e")) || store.get("multas.team","") || "";
+let teamOpen = false;
+const teamLink = id => location.origin + location.pathname + "?e=" + id;
+
 const UNIT_TXT = {fijo:"", minuto:"/min", cabeza:" por cabeza"};
 const qtyTxt = m => m.unidad==="minuto" ? " · "+m.cantidad+" min" : (m.cantidad>1 ? " ×"+m.cantidad : "");
 
-const SEED_PLAYERS = [
-  ["XAVIER NOGUERA","jugador"],["VICTOR FERNANDEZ","jugador"],["S. T.","jugador"],["JOSEP SORIANO","jugador"],
-  ["JAIME MAS","jugador"],["IVAN CAMBRA","jugador"],["VICTOR CAMBRA","jugador"],["HUGO ABAD","jugador"],
-  ["BLAI REIG","jugador"],["IKER GARCIA","jugador"],["IÑAKI VILLAR","jugador"],["JOSE IGNACIO BLASCO","entrenador"]];
-const SEED_TYPES = [
+const DEFAULT_TYPES = [
   ["Tarde al entreno (+5 min)",3,"fijo"],["Falta al entreno sin avisar",5,"fijo"],["Tarde al partido sin avisar",1,"minuto"],
   ["Técnica / Flagrante",5,"fijo"],["Expulsión",3,"fijo"],["Técnica banquillo",2,"cabeza"],["Técnica entrenador",5,"fijo"],
   ["Tiro medio campo (viernes, el último)",2,"fijo"]];
 
 const S = {
-  jug: [], tipos: [], multas: [], aj: {inicio:"", contador:"", admins:[]}, ajExists: null,
+  jug: [], tipos: [], multas: [], aj: {nombre:"", inicio:"", contador:"", admins:[], escudo:"", viernes:false},
   ready: {j:false,t:false,m:false,a:false},
   user: null, canWrite: false,
   selType: null, selPlayers: new Set(), openRank: null,
-  lastSeen: store.get("multas.lastSeen", 0),
+  lastSeen: 0,
   prefs: Object.assign({live:true, fri:true}, store.get("multas.prefs", {}))
 };
 const email = () => (S.user && !S.user.isAnonymous && S.user.email || "").toLowerCase();
@@ -63,7 +69,7 @@ function toast(msg){
 }
 function errMsg(e){
   const c = e && e.code || "";
-  if(c.includes("permission-denied")) return "No tienes permiso. Entra como administrador en Ajustes.";
+  if(c.includes("permission-denied")) return "No tienes permiso para hacer esto. Solo los administradores del equipo pueden.";
   if(c.includes("resource-exhausted")) return "Se ha superado el límite gratuito de hoy. Inténtalo mañana.";
   if(c.includes("unavailable")) return "Sin conexión. Se guardará cuando vuelva la red.";
   if(c.includes("invalid-credential")||c.includes("wrong-password")||c.includes("user-not-found")) return "Correo o contraseña incorrectos.";
@@ -82,7 +88,13 @@ function armed(btn, label, fn){
   const orig=btn.textContent; btn.dataset.armed="1"; btn.classList.add("armed"); btn.textContent=label;
   setTimeout(()=>{ if(btn.isConnected && btn.dataset.armed==="1"){ btn.dataset.armed=""; btn.classList.remove("armed"); btn.textContent=orig; } },3500);
 }
-const dref = (c,id) => F.doc(db,c,id);
+const teamRef = () => F.doc(db,"equipos",TEAM);
+const col = c => F.collection(db,"equipos",TEAM,c);
+const dref = (c,id) => c==="tokens" ? F.doc(db,"tokens",id) : c==="ajustes" ? teamRef() : F.doc(db,"equipos",TEAM,c,id);
+async function copyText(txt, okMsg){
+  try{ await navigator.clipboard.writeText(txt); toast(okMsg||"Copiado"); }
+  catch{ const ta=document.createElement("textarea"); ta.value=txt; ta.setAttribute("readonly",""); ta.style.cssText="width:100%;min-height:120px"; document.activeElement?.closest(".card,.wrap")?.appendChild(ta); ta.select(); toast("Selecciona el texto y cópialo"); }
+}
 
 /* ---------- datos derivados ---------- */
 const fromDate = () => S.aj.inicio ? S.aj.inicio+"-01" : "";
@@ -99,6 +111,8 @@ function totals(list){ let t=0,p=0; list.forEach(m=>{ t+=+m.importe||0; if(!m.pa
 /* ---------- navegación ---------- */
 const VIEWS=["resumen","anadir","historial","equipo","ajustes"];
 function route(){
+  document.querySelector("nav.tabs").hidden = !teamOpen; $(".pot").hidden = !teamOpen;
+  if(!teamOpen){ document.querySelectorAll(".view").forEach(el=>{ el.hidden = el.id !== "v-inicio"; }); window.scrollTo(0,0); return; }
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "resumen";
   document.querySelectorAll(".view").forEach(el=>{ el.hidden = el.id !== "v-"+v; });
   document.querySelectorAll("nav.tabs a").forEach(a=>{ a.dataset.v===v ? a.setAttribute("aria-current","page") : a.removeAttribute("aria-current"); });
@@ -106,12 +120,17 @@ function route(){
   window.scrollTo(0,0);
 }
 let seenT;
-function markSeenSoon(){ clearTimeout(seenT); seenT=setTimeout(()=>{ S.lastSeen=Date.now(); store.set("multas.lastSeen",S.lastSeen); renderBadge(); },2500); }
+function markSeenSoon(){ clearTimeout(seenT); seenT=setTimeout(()=>{ S.lastSeen=Date.now(); store.set("multas.lastSeen."+TEAM,S.lastSeen); renderBadge(); },2500); }
 
 /* ---------- pintar ---------- */
 function renderAll(){ renderHeader(); renderResumen(); renderAdd(); renderHist(); renderEquipo(); renderAjustes(); renderBadge(); }
 
 function renderHeader(){
+  const name = teamOpen ? (S.aj.nombre||"Tu equipo") : "Del equipo";
+  $("#teamName").textContent = name;
+  document.title = teamOpen && S.aj.nombre ? "Multas · "+S.aj.nombre : "Multas del equipo";
+  const src = teamOpen && S.aj.escudo ? S.aj.escudo : "icons/balon.png";
+  if($("#crestImg").getAttribute("src")!==src) $("#crestImg").src = src;
   const T = totals(S.multas.filter(inPeriod));
   $("#potTotal").textContent = eur(T.t);
   $("#potLabel").textContent = S.aj.inicio ? "Bote desde "+MESES[+S.aj.inicio.split("-")[1]-1] : "Bote";
@@ -125,8 +144,7 @@ function renderResumen(){
   $("#periodText").textContent = !loaded ? "Cargando datos del equipo…" :
     (S.aj.inicio ? "Contando desde "+monthName(S.aj.inicio)+" · "+list.length+" multas" : "Contando todas las multas · "+list.length+" en total");
   $("#countedBy").textContent = S.aj.contador ? "Conteo: "+S.aj.contador+" · Multas en efectivo" : "Multas en efectivo";
-  $("#fridayBanner").hidden = !(new Date().getDay()===5 && S.prefs.fri);
-  $("#setupCard").hidden = !(S.ajExists===false && email());
+  $("#fridayBanner").hidden = !(new Date().getDay()===5 && S.aj.viernes && S.prefs.fri);
   renderMe();
   const me = myPlayer();
 
@@ -138,7 +156,7 @@ function renderResumen(){
   const max = Math.max(1,...rows.map(r=>r.t));
   const el=$("#rank");
   if(!loaded){ el.innerHTML='<li class="empty">Cargando…</li>'; return; }
-  if(!rows.length){ el.innerHTML='<li class="empty"><b>Aún no hay nadie</b>'+(S.ajExists===false?"Entra como administrador en Ajustes y pulsa «Configurar el equipo».":"Ve a «Equipo» y añade a los jugadores.")+'</li>'; return; }
+  if(!rows.length){ el.innerHTML='<li class="empty"><b>Aún no hay nadie</b>'+(S.canWrite?"Ve a «Equipo» y añade a los jugadores.":"Cuando el administrador añada a los jugadores, aparecerán aquí.")+'</li>'; return; }
   el.innerHTML = rows.map((r,i)=>{
     const open = S.openRank===r.p.id;
     const items = r.items.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||"")||(b.creado||0)-(a.creado||0));
@@ -249,15 +267,25 @@ function renderEquipo(){
           :`<button type="button" class="btn small ghost" data-restore="${esc(p.id)}">Recuperar</button>${cnt(p.id)?"":`<button type="button" class="btn small danger" data-purge="${esc(p.id)}">Eliminar</button>`}`}
       </span>`:""}
     </div>`;
-  const needSeed = S.canWrite && S.ready.j && S.ready.t && (!S.jug.length || !S.tipos.length);
+  const needSeed = S.canWrite && S.ready.t && !S.tipos.length;
   $("#activeList").innerHTML = (act.length?act.map(p=>row(p,true)).join(""):'<p class="note">'+(S.ready.j?"Todavía no hay nadie en el equipo.":"Cargando…")+'</p>')
-    + (needSeed?'<button type="button" class="btn" id="seedBtn" style="margin-top:8px">Cargar plantilla y multas del Caixa Ontinyent</button>':"");
+    + (needSeed?'<button type="button" class="btn" id="seedBtn" style="margin-top:8px">Añadir multas de ejemplo</button>':"");
   $("#inactiveCard").hidden=!ina.length;
   $("#inactiveList").innerHTML=ina.map(p=>row(p,false)).join("");
 }
 
 let ajFilled=false;
 function renderAjustes(){
+  // equipo
+  $("#tcName").textContent = S.aj.nombre||"Tu equipo";
+  $("#tcCode").textContent = TEAM;
+  $("#tcLink").value = teamLink(TEAM);
+  $("#tcCrest").src = S.aj.escudo || "icons/balon.png";
+  $("#teamAdmin").hidden = !S.canWrite;
+  if(S.canWrite && document.activeElement!==$("#tcNameIn")) $("#tcNameIn").value = S.aj.nombre||"";
+  $("#tcFri").checked = !!S.aj.viernes;
+  $("#tcCrestDel").hidden = !S.aj.escudo;
+  $("#nFriWrap").hidden = !S.aj.viernes;
   // cuenta
   const e=email();
   $("#loginForm").hidden = !!e;
@@ -348,9 +376,10 @@ async function listenForeground(){
   // Con la app abierta ya avisamos con el aviso en pantalla; aquí solo el recordatorio del viernes.
   M.onMessage(messaging, p=>{ if(p?.data?.tipo==="viernes") toast(p.notification?.body||"Hoy toca tiro de medio campo"); });
 }
-function tokenData(){ return { uid:S.user?.uid||"", jugador: myPlayer()?.id||"", solo_mias: !!(S.prefs.mine && myPlayer()), viernes: !!S.prefs.fri, creado: Date.now(), ios: isIOS }; }
+function tokenData(){ return { equipo: TEAM, uid:S.user?.uid||"", jugador: myPlayer()?.id||"", solo_mias: !!(S.prefs.mine && myPlayer()), viernes: !!S.prefs.fri, creado: Date.now(), ios: isIOS }; }
 async function syncTokenPrefs(){
   const tok=store.get("multas.pushToken","");
+  if(!teamOpen) return;
   if(tok) try{ await F.setDoc(dref("tokens",tok), tokenData()); }catch{}
 }
 
@@ -372,6 +401,17 @@ document.addEventListener("click", e=>{
       const other=v && S.jug.find(p=>p.id!==d.mailsave && String(p.email||"").toLowerCase()===v);
       if(other){ toast("Ese correo ya es de "+other.nombre); return; }
       run(()=>F.updateDoc(dref("jugadores",d.mailsave),{email:v}), v?"Correo guardado":"Cuenta quitada"); return; }
+  if(d.open){ openTeam(d.open); location.hash="resumen"; return; }
+  if(t.id==="switchTeam"){ leaveTeam(); return; }
+  if(t.id==="migrateBtn"){ migrateLegacy(); return; }
+  if(t.id==="copyLink"){ copyText(teamLink(TEAM),"Enlace copiado"); return; }
+  if(t.id==="copyInvite"){ copyText(inviteText(),"Invitación copiada. Pégala en el grupo"); return; }
+  if(t.id==="copyBtn"){ copySummary(); return; }
+  if(t.id==="tcNameSave"){ const v=$("#tcNameIn").value.trim(); if(!v){ toast("Escribe un nombre"); return; } run(()=>F.updateDoc(teamRef(),{nombre:v}),"Nombre guardado"); return; }
+  if(t.id==="tcCrestDel"){ armed(t,"¿Quitar? Toca otra vez",()=>run(()=>F.updateDoc(teamRef(),{escudo:""}),"Escudo quitado")); return; }
+  if(t.id==="cIn"){ run(()=>A.signInWithEmailAndPassword(auth,$("#cEmail").value.trim(),$("#cPass").value),"Has entrado"); return; }
+  if(t.id==="cNew"){ run(()=>A.createUserWithEmailAndPassword(auth,$("#cEmail").value.trim(),$("#cPass").value),"Cuenta creada"); return; }
+  if(t.id==="cOut"){ run(()=>A.signOut(auth),"Has salido"); return; }
   if(t.id==="seedBtn"){ t.disabled=true; seedTeam().finally(()=>{ t.disabled=false; }); return; }
   if(t.id==="lOut"){ run(()=>A.signOut(auth),"Has salido"); return; }
   if(d.rank!==undefined){ S.openRank = S.openRank===d.rank?null:d.rank; renderResumen(); return; }
@@ -406,6 +446,24 @@ $("#nLive").addEventListener("change",e=>{ S.prefs.live=e.target.checked; store.
 $("#nMine").addEventListener("change",e=>{ S.prefs.mine=e.target.checked; store.set("multas.prefs",S.prefs); syncTokenPrefs(); });
 $("#nFri").addEventListener("change",e=>{ S.prefs.fri=e.target.checked; store.set("multas.prefs",S.prefs); renderResumen(); syncTokenPrefs(); });
 $("#fridayBtn").addEventListener("click",()=>{ const t=S.tipos.find(x=>/medio campo/i.test(x.nombre)); if(t) S.selType=t.id; S.selPlayers.clear(); location.hash="anadir"; renderAdd(); });
+$("#tcFri").addEventListener("change",e=>run(()=>F.updateDoc(teamRef(),{viernes:e.target.checked}),e.target.checked?"Recordatorio activado para todo el equipo":"Recordatorio desactivado"));
+$("#tcFile").addEventListener("change",e=>{ const f=e.target.files?.[0]; if(f) setCrest(f); e.target.value=""; });
+$("#joinForm").addEventListener("submit",async e=>{
+  e.preventDefault(); const id=cleanCode($("#joinCode").value); if(id.length<4){ toast("Escribe el código o pega el enlace del equipo"); return; }
+  try{ const t=await F.getDoc(F.doc(db,"equipos",id)); if(!t.exists()){ toast("No existe ningún equipo con el código "+id); return; } }catch(err){ toast(errMsg(err)); return; }
+  $("#joinCode").value=""; location.hash="resumen"; openTeam(id);
+});
+$("#createForm").addEventListener("submit",e=>{ e.preventDefault(); createTeam(); });
+function copySummary(){
+  const list=S.multas.filter(inPeriod); const by=new Map();
+  list.forEach(m=>{ const n=playerById(m.jugador)?.nombre||m.jugadorNombre||"?"; const r=by.get(n)||{t:0,p:0}; r.t+=+m.importe||0; if(!m.pagada) r.p+=+m.importe||0; by.set(n,r); });
+  const T=totals(list);
+  const lines=["🏀 *MULTAS · "+(S.aj.nombre||"EQUIPO").toUpperCase()+"* 🏀"];
+  if(S.aj.inicio) lines.push("Desde "+monthName(S.aj.inicio));
+  lines.push(""); [...by.entries()].sort((a,b)=>b[1].t-a[1].t).forEach(([n,r])=>lines.push("*"+n+"*: "+eur(r.t)+(r.p>0?" (debe "+eur(r.p)+")":" ✅")));
+  lines.push("","*Bote:* "+eur(T.t)+" · Por cobrar: "+eur(T.p)); if(S.aj.contador) lines.push("Conteo: "+S.aj.contador);
+  copyText(lines.join("\n"),"Resumen copiado. Pégalo en el grupo");
+}
 $("#pushBtn").addEventListener("click",()=>{ $("#pushBtn").dataset.on ? disablePush() : enablePush(); });
 
 $("#addForm").addEventListener("submit", e=>{
@@ -414,7 +472,7 @@ $("#addForm").addEventListener("submit", e=>{
   const q=getQty(); const fecha=$("#fecha").value||today(); const nota=$("#nota").value.trim();
   const b=F.writeBatch(db);
   ids.forEach(id=>{ const p=playerById(id);
-    b.set(F.doc(F.collection(db,"multas")),{jugador:id, jugadorNombre:p?.nombre||"", tipo:t.id, tipoNombre:t.nombre, unidad:t.unidad||"fijo", precio:+t.precio, cantidad:q, importe:(+t.precio)*q, fecha, nota, pagada:false, notificada:false, creado:Date.now(), autor:S.user?.uid||""}); });
+    b.set(F.doc(col("multas")),{jugador:id, jugadorNombre:p?.nombre||"", tipo:t.id, tipoNombre:t.nombre, unidad:t.unidad||"fijo", precio:+t.precio, cantidad:q, importe:(+t.precio)*q, fecha, nota, pagada:false, notificada:false, creado:Date.now(), autor:S.user?.uid||""}); });
   // El lote se guarda en el móvil al momento y se sube cuando hay red
   b.commit().catch(err=>{ console.error(err); toast(errMsg(err)); });
   toast(ids.length===1?"Multa puesta: "+eur((+t.precio)*q):ids.length+" multas puestas");
@@ -425,7 +483,7 @@ $("#playerForm").addEventListener("submit", async e=>{
   e.preventDefault();
   const nombre=$("#pName").value.trim().toUpperCase(); if(!nombre){ toast("Escribe el nombre"); return; }
   if(S.jug.some(p=>p.nombre===nombre && p.activo!==false)){ toast(nombre+" ya está en el equipo"); return; }
-  const ok=await run(()=>F.addDoc(F.collection(db,"jugadores"),{nombre, rol:$("#pRole").value, activo:true, creado:Date.now()}), nombre+" añadido");
+  const ok=await run(()=>F.addDoc(col("jugadores"),{nombre, rol:$("#pRole").value, activo:true, creado:Date.now()}), nombre+" añadido");
   if(ok) $("#pName").value="";
 });
 $("#periodForm").addEventListener("submit", e=>{
@@ -437,7 +495,7 @@ $("#typeForm").addEventListener("submit", e=>{
   const nombre=$("#tName").value.trim(); const precio=+$("#tPrice").value;
   if(!nombre||!(precio>=0)){ toast("Pon un nombre y un precio válido"); return; }
   const orden=Math.max(0,...S.tipos.map(t=>t.orden||0))+1;
-  run(()=>F.addDoc(F.collection(db,"tipos"),{nombre,precio,unidad:$("#tUnit").value,orden}),"Tipo de multa añadido").then(ok=>{ if(ok) $("#tName").value=""; });
+  run(()=>F.addDoc(col("tipos"),{nombre,precio,unidad:$("#tUnit").value,orden}),"Tipo de multa añadido").then(ok=>{ if(ok) $("#tName").value=""; });
 });
 $("#adminForm").addEventListener("submit", e=>{
   e.preventDefault();
@@ -455,18 +513,10 @@ $("#lForgot").addEventListener("click",()=>{
   const v=$("#lEmail").value.trim(); if(!v){ toast("Escribe tu correo arriba"); return; }
   run(()=>A.sendPasswordResetEmail(auth,v),"Te hemos enviado un correo para cambiarla");
 });
-$("#setupBtn").addEventListener("click", async ()=>{
-  const btn=$("#setupBtn"); btn.disabled=true;
-  const ok = await run(()=>F.setDoc(dref("ajustes","general"),{inicio:"", contador:"Ivan", admins:[email()]}));
-  if(!ok){ btn.disabled=false; return; }
-  await seedTeam();
-  btn.disabled=false;
-});
 async function seedTeam(){
   const b=F.writeBatch(db);
-  if(!S.jug.length) SEED_PLAYERS.forEach(([nombre,rol],i)=>b.set(dref("jugadores","p"+pad(i+1)),{nombre,rol,activo:true,creado:Date.now()}));
-  if(!S.tipos.length) SEED_TYPES.forEach(([nombre,precio,unidad],i)=>b.set(dref("tipos","t"+(i+1)),{nombre,precio,unidad,orden:i+1}));
-  return run(()=>b.commit(),"Plantilla y multas cargadas");
+  DEFAULT_TYPES.forEach(([nombre,precio,unidad],i)=>b.set(dref("tipos","t"+(i+1)),{nombre,precio,unidad,orden:i+1}));
+  return run(()=>b.commit(),"Multas de ejemplo añadidas");
 }
 addEventListener("hashchange",route);
 
@@ -479,16 +529,20 @@ function subscribe(){
   const done=snap=>{ if(!snap.metadata.fromCache){ clearTimeout(timer); setStatus(""); } };
   const fail=e=>{ console.error(e); clearTimeout(timer); setStatus("No se pueden leer los datos: "+errMsg(e)); };
   let firstMultas=true;
-  unsubs.push(F.onSnapshot(F.collection(db,"jugadores"), s=>{ S.jug=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.j=true; done(s);
+  unsubs.push(F.onSnapshot(col("jugadores"), s=>{ S.jug=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.j=true; done(s);
     const mid=myPlayer()?.id||""; if(mid!==S.meId){ S.meId=mid; syncTokenPrefs(); }
     renderAll(); }, fail));
-  unsubs.push(F.onSnapshot(F.collection(db,"tipos"), s=>{ S.tipos=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.t=true; done(s); renderAll(); }, fail));
-  unsubs.push(F.onSnapshot(dref("ajustes","general"), s=>{
-    S.ajExists = s.exists() ? true : (s.metadata.fromCache ? S.ajExists : false);
-    S.aj=Object.assign({inicio:"",contador:"",admins:[]}, s.exists()?s.data():{});
+  unsubs.push(F.onSnapshot(col("tipos"), s=>{ S.tipos=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.t=true; done(s); renderAll(); }, fail));
+  unsubs.push(F.onSnapshot(teamRef(), s=>{
+    if(!s.exists()){
+      if(s.metadata.fromCache) return;
+      toast("No existe ningún equipo con el código "+TEAM); leaveTeam(); return;
+    }
+    S.aj=Object.assign({nombre:"",inicio:"",contador:"",admins:[],escudo:"",viernes:false}, s.data());
+    rememberTeam(TEAM, S.aj.nombre);
     if(!s.metadata.hasPendingWrites) ajFilled=false;
     computeWrite(); S.ready.a=true; done(s); renderAll(); }, fail));
-  unsubs.push(F.onSnapshot(F.collection(db,"multas"), s=>{
+  unsubs.push(F.onSnapshot(col("multas"), s=>{
     S.multas=s.docs.map(d=>({id:d.id,...d.data()}));
     if(!firstMultas && S.prefs.live){
       const added=s.docChanges().filter(c=>c.type==="added" && !c.doc.metadata.hasPendingWrites).map(c=>c.doc.data()).filter(m=>m.autor!==S.user?.uid);
@@ -500,15 +554,114 @@ function subscribe(){
   }, fail));
 }
 
+/* ---------- equipos: entrar, crear, cambiar ---------- */
+function resetTeamState(){
+  unsubs.forEach(u=>u()); unsubs=[];
+  Object.assign(S,{jug:[],tipos:[],multas:[],aj:{nombre:"",inicio:"",contador:"",admins:[],escudo:"",viernes:false},ready:{j:false,t:false,m:false,a:false},canWrite:false,selType:null,openRank:null,meId:undefined});
+  S.selPlayers=new Set(); ajFilled=false;
+}
+function rememberTeam(id, nombre){
+  const list=store.get("multas.teams",[]).filter(t=>t.id!==id);
+  list.unshift({id, nombre:nombre||id}); store.set("multas.teams", list.slice(0,8));
+}
+function openTeam(id){
+  resetTeamState();
+  TEAM=id; teamOpen=true; store.set("multas.team",id);
+  S.lastSeen = store.get("multas.lastSeen."+id, id===LEGACY_TEAM ? store.get("multas.lastSeen",0) : 0);
+  try{ history.replaceState(null,"",location.pathname+"?e="+id+location.hash); }catch{}
+  if(S.user){ subscribe(); syncTokenPrefs(); F.setDoc(F.doc(db,"usuarios",S.user.uid),{equipos:F.arrayUnion(id)},{merge:true}).catch(()=>{}); }
+  route(); renderAll();
+}
+function leaveTeam(){
+  resetTeamState(); teamOpen=false; TEAM=""; store.set("multas.team","");
+  try{ history.replaceState(null,"",location.pathname); }catch{}
+  route(); renderAll(); renderLanding();
+}
+let landingFor=null;
+async function renderLanding(){
+  if(teamOpen) return;
+  const e=email();
+  $("#createLogin").hidden=!!e; $("#createForm").hidden=!e;
+  $("#createWho").textContent = e ? "Serás el administrador del equipo nuevo ("+e+")." : "";
+  const recent=store.get("multas.teams",[]);
+  let ids=recent.map(t=>t.id); const names=Object.fromEntries(recent.map(t=>[t.id,t.nombre]));
+  if(S.user && landingFor!==S.user.uid){
+    landingFor=S.user.uid;
+    try{ const u=await F.getDoc(F.doc(db,"usuarios",S.user.uid)); (u.data()?.equipos||[]).forEach(id=>{ if(!ids.includes(id)) ids.push(id); }); }catch{}
+    for(const id of ids.filter(id=>!names[id]||names[id]===id)){ try{ const t=await F.getDoc(F.doc(db,"equipos",id)); if(t.exists()) names[id]=t.data().nombre; else ids=ids.filter(x=>x!==id); }catch{} }
+    S.landTeams={ids,names};
+    // Migración del equipo de antes al sistema de varios equipos
+    $("#migrateCard").hidden=true;
+    if(e){ try{
+      const leg=await F.getDoc(F.doc(db,"ajustes","general"));
+      const isLegAdmin = leg.exists() && (leg.data().admins||[]).map(x=>String(x).toLowerCase()).includes(e);
+      if(isLegAdmin){ const t=await F.getDoc(F.doc(db,"equipos",LEGACY_TEAM)); $("#migrateCard").hidden = t.exists(); }
+    }catch{} }
+  }
+  const L=S.landTeams||{ids,names};
+  $("#myTeamsCard").hidden=!L.ids.length;
+  $("#myTeams").innerHTML=L.ids.map(id=>`<div class="prow"><span class="who"><b>${esc(L.names[id]||id)}</b><span>Código ${esc(id)}</span></span><button type="button" class="btn small" data-open="${esc(id)}">Abrir</button></div>`).join("");
+}
+async function createTeam(){
+  const nombre=$("#ctName").value.trim(); if(!nombre){ toast("Escribe el nombre del equipo"); return; }
+  const btn=$("#ctBtn"); btn.disabled=true;
+  try{
+    let id=genCode();
+    for(let i=0;i<5;i++){ const t=await F.getDoc(F.doc(db,"equipos",id)); if(!t.exists()) break; id=genCode(); }
+    const b=F.writeBatch(db);
+    b.set(F.doc(db,"equipos",id),{nombre, admins:[email()], contador:$("#ctCount").value.trim(), inicio:"", viernes:false, escudo:"", creado:Date.now(), creador:S.user.uid});
+    if($("#ctSample").checked) DEFAULT_TYPES.forEach(([n,precio,unidad],i)=>b.set(F.doc(db,"equipos",id,"tipos","t"+(i+1)),{nombre:n,precio,unidad,orden:i+1}));
+    if(await run(()=>b.commit(),"Equipo creado: "+nombre)){ rememberTeam(id,nombre); location.hash="equipo"; openTeam(id); }
+  } finally { btn.disabled=false; }
+}
+async function migrateLegacy(){
+  const btn=$("#migrateBtn"); btn.disabled=true; btn.textContent="Pasando los datos…";
+  try{
+    const L=(await F.getDoc(F.doc(db,"ajustes","general"))).data()||{};
+    let escudo=""; try{ const blob=await (await fetch("icons/escudo-128.png")).blob(); escudo=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); }); }catch{}
+    const ok=await run(()=>F.setDoc(F.doc(db,"equipos",LEGACY_TEAM),{nombre:"Caixa Ontinyent", admins:L.admins||[email()], contador:L.contador||"", inicio:L.inicio||"", viernes:true, escudo, creado:Date.now(), creador:S.user.uid}));
+    if(!ok) return;
+    for(const c of ["jugadores","tipos","multas"]){
+      const snap=await F.getDocs(F.collection(db,c));
+      let b=F.writeBatch(db), n=0;
+      for(const d of snap.docs){ const data={...d.data()}; if(c==="multas") data.notificada=true; b.set(F.doc(db,"equipos",LEGACY_TEAM,c,d.id),data); if(++n%400===0){ await b.commit(); b=F.writeBatch(db); } }
+      await b.commit();
+    }
+    toast("Equipo pasado al sistema nuevo"); rememberTeam(LEGACY_TEAM,"Caixa Ontinyent"); openTeam(LEGACY_TEAM);
+  }catch(e){ console.error(e); toast(errMsg(e)); }
+  finally{ btn.disabled=false; btn.textContent="Pasar Caixa Ontinyent al sistema nuevo"; }
+}
+async function setCrest(file){
+  try{
+    const img=await createImageBitmap(file);
+    const k=Math.min(1,128/Math.max(img.width,img.height));
+    const c=document.createElement("canvas"); c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    let url=c.toDataURL("image/png"); if(url.length>150000) url=c.toDataURL("image/jpeg",0.85);
+    await run(()=>F.updateDoc(teamRef(),{escudo:url}),"Escudo guardado");
+  }catch(e){ console.error(e); toast("No se pudo leer esa imagen. Prueba con un PNG o JPG."); }
+}
+function inviteText(){
+  return ["🏀 *Multas · "+(S.aj.nombre||"equipo")+"*", "Entra en la app: "+teamLink(TEAM),
+    "📱 *iPhone:* en Safari → Compartir ⬆️ → *Añadir a pantalla de inicio*",
+    "🤖 *Android:* en Chrome → *Instalar*",
+    "👤 *Ajustes → Cuenta → Crear cuenta*, y en *Resumen* elige tu nombre → *Soy yo*",
+    "🔔 *Ajustes → Avisos → Activar notificaciones*"].join("\n");
+}
+
 let lastUid=null;
-A.onAuthStateChanged(auth, u=>{
+A.onAuthStateChanged(auth, async u=>{
   if(!u){ A.signInAnonymously(auth).catch(e=>setStatus("No se puede conectar: "+errMsg(e)+". Revisa que el acceso anónimo esté activado (GUIA.md).")); return; }
   S.user=u; computeWrite();
-  if(u.uid!==lastUid){ lastUid=u.uid; subscribe(); syncTokenPrefs(); }
-  renderAll();
+  if(u.uid!==lastUid){
+    lastUid=u.uid;
+    if(!TEAM && legacyDevice){ try{ const t=await F.getDoc(F.doc(db,"equipos",LEGACY_TEAM)); if(t.exists()) TEAM=LEGACY_TEAM; }catch{} }
+    if(TEAM) openTeam(TEAM); else { teamOpen=false; route(); }
+  }
+  renderAll(); renderLanding();
 });
 
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(e=>console.warn("SW",e));
 $("#fecha").value=today();
-route(); renderInstall(); renderAll();
+route(); renderInstall(); renderAll(); renderLanding();
 if(store.get("multas.pushToken","")) listenForeground();

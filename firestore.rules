@@ -1,38 +1,50 @@
 rules_version = '2';
-// Reglas de la base de datos. Cópialas en Firebase → Firestore → Reglas (GUIA.md, paso 3).
+// Reglas de la base de datos (varios equipos).
+// Cópialas en Firebase → Firestore → Reglas → Publicar.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function myEmail() { return request.auth.token.email.lower(); }
     function hasEmail() { return signedIn() && request.auth.token.email != null; }
-    function isAdmin() {
+    function myEmail() { return request.auth.token.email.lower(); }
+    // getAfter: también vale en el mismo lote en que se crea el equipo
+    function isAdminOf(e) {
       return hasEmail() &&
-        exists(/databases/$(database)/documents/ajustes/general) &&
-        myEmail() in get(/databases/$(database)/documents/ajustes/general).data.admins;
+        myEmail() in getAfter(/databases/$(database)/documents/equipos/$(e)).data.admins;
+    }
+    function validTeam() {
+      let d = request.resource.data;
+      return d.nombre is string && d.nombre.size() > 0 && d.nombre.size() <= 60 &&
+        d.admins is list && d.admins.size() > 0 && d.admins.size() <= 20 &&
+        d.get('escudo', '').size() < 300000;
     }
 
-    // Todo el que abre la app (aunque no tenga cuenta) puede ver las multas.
-    // Solo los administradores pueden cambiarlas.
-    match /jugadores/{id} {
-      allow read: if signedIn();
-      allow create, delete: if isAdmin();
-      // Un jugador puede vincular su cuenta a un nombre libre, o desvincularse. Nada más.
-      allow update: if isAdmin() || (
-        hasEmail() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email']) &&
-        ((resource.data.get('email', '') == '' && request.resource.data.email == myEmail()) ||
-         (resource.data.get('email', '') == myEmail() && request.resource.data.email == ''))
-      );
-    }
-    match /tipos/{id}     { allow read: if signedIn(); allow write: if isAdmin(); }
-    match /multas/{id}    { allow read: if signedIn(); allow write: if isAdmin(); }
+    match /equipos/{e} {
+      // Con el código se puede ver el equipo; nadie puede listar todos los equipos.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if hasEmail() && myEmail() in request.resource.data.admins && validTeam();
+      allow update: if isAdminOf(e) && validTeam() && myEmail() in resource.data.admins;
+      allow delete: if hasEmail() && myEmail() in resource.data.admins;
 
-    match /ajustes/{id} {
-      allow read: if signedIn();
-      // Primer arranque: quien configura el equipo se pone como primer administrador.
-      allow create: if id == 'general' && hasEmail() && request.resource.data.admins == [myEmail()];
-      allow update, delete: if isAdmin();
+      match /jugadores/{id} {
+        allow read: if signedIn();
+        allow create, delete: if isAdminOf(e);
+        // Un jugador puede vincular su cuenta a un nombre libre, o desvincularse. Nada más.
+        allow update: if isAdminOf(e) || (
+          hasEmail() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email']) &&
+          ((resource.data.get('email', '') == '' && request.resource.data.email == myEmail()) ||
+           (resource.data.get('email', '') == myEmail() && request.resource.data.email == ''))
+        );
+      }
+      match /tipos/{id}  { allow read: if signedIn(); allow write: if isAdminOf(e); }
+      match /multas/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
+    }
+
+    // Lista de equipos de cada persona (solo la ve ella misma)
+    match /usuarios/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
     // Móviles que reciben notificaciones. Nadie puede leer la lista desde la app.
@@ -40,5 +52,11 @@ service cloud.firestore {
       allow create, update, delete: if signedIn();
       allow read: if false;
     }
+
+    // Datos de la versión anterior (un solo equipo): solo lectura, para pasarlos al sistema nuevo.
+    match /jugadores/{id} { allow read: if signedIn(); }
+    match /tipos/{id}     { allow read: if signedIn(); }
+    match /multas/{id}    { allow read: if signedIn(); }
+    match /ajustes/{id}   { allow read: if signedIn(); }
   }
 }

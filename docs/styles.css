@@ -146,3 +146,8 @@ nav.tabs a.add svg{background:var(--orange);color:#fff;border-radius:50%;padding
 #meCard .amt b{font-size:28px}
 .crest{background:none;box-shadow:none;width:auto;height:48px;border-radius:0}
 .crest img{height:48px;width:auto;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.stack{display:flex;flex-direction:column;gap:10px;border-top:1px dashed var(--line);padding-top:12px}
+.code{font-family:var(--display);font-size:18px;letter-spacing:.12em}
+input.pw{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;width:100%;font-size:16px}
+input[type=file]{font-size:14px;min-height:44px}
+#tcLink{font-size:14px}
