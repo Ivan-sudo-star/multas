@@ -10,10 +10,14 @@ import json
 import os
 import sys
 
+if not os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip():
+    print("Notificaciones sin configurar (falta el secreto FIREBASE_SERVICE_ACCOUNT). No se envía nada.")
+    sys.exit(0)
+
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
 
-cred = credentials.Certificate(json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"]))
+cred =credentials.Certificate(json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"]))
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 APP_URL = os.environ.get("APP_URL", "").strip()
