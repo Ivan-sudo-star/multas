@@ -141,3 +141,6 @@ nav.tabs a.add svg{background:var(--orange);color:#fff;border-radius:50%;padding
 .who-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .adm{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px;word-break:break-all}
 .adm:last-child{border-bottom:0}
+.rrow.me{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange)}
+#meCard h3{font-size:14px}
+#meCard .amt b{font-size:28px}

@@ -92,6 +92,7 @@ const typeById = id => S.tipos.find(t=>t.id===id);
 function sortPlayers(a,b){ if((a.rol==="entrenador")!==(b.rol==="entrenador")) return a.rol==="entrenador"?1:-1; return (a.nombre||"").localeCompare(b.nombre||"","es"); }
 const activePlayers = () => S.jug.filter(p=>p.activo!==false).sort(sortPlayers);
 const initial = n => (n||"?").trim().charAt(0).toUpperCase();
+const myPlayer = () => { const e=email(); return e ? S.jug.find(p=>String(p.email||"").toLowerCase()===e) : null; };
 const isNew = m => (m.creado||0) > S.lastSeen && m.autor !== (S.user&&S.user.uid);
 function totals(list){ let t=0,p=0; list.forEach(m=>{ t+=+m.importe||0; if(!m.pagada) p+=+m.importe||0; }); return {t, p, c:t-p}; }
 
@@ -126,6 +127,8 @@ function renderResumen(){
   $("#countedBy").textContent = S.aj.contador ? "Conteo: "+S.aj.contador+" · Multas en efectivo" : "Multas en efectivo";
   $("#fridayBanner").hidden = !(new Date().getDay()===5 && S.prefs.fri);
   $("#setupCard").hidden = !(S.ajExists===false && email());
+  renderMe();
+  const me = myPlayer();
 
   const by = new Map();
   S.jug.forEach(p=>by.set(p.id,{p, t:0, pend:0, n:0, items:[]}));
@@ -139,17 +142,39 @@ function renderResumen(){
   el.innerHTML = rows.map((r,i)=>{
     const open = S.openRank===r.p.id;
     const items = r.items.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||"")||(b.creado||0)-(a.creado||0));
-    return `<li class="rrow">
+    const isMe = me && me.id===r.p.id;
+    return `<li class="rrow ${isMe?"me":""}">
       <button type="button" class="rhead" data-rank="${esc(r.p.id)}" aria-expanded="${open}">
         <span class="pos">${r.t>0?i+1:"–"}</span>
         <span class="av ${r.p.rol==="entrenador"?"coach":""}">${esc(initial(r.p.nombre))}</span>
-        <span class="who"><b>${esc(r.p.nombre)}</b><span>${r.n} ${r.n===1?"multa":"multas"}${r.p.rol==="entrenador"?" · entrenador":""}</span><span class="bar"><i style="width:${(r.t/max*100).toFixed(1)}%"></i></span></span>
+        <span class="who"><b>${esc(r.p.nombre)}${isMe?' <span class="pill newp">tú</span>':""}</b><span>${r.n} ${r.n===1?"multa":"multas"}${r.p.rol==="entrenador"?" · entrenador":""}</span><span class="bar"><i style="width:${(r.t/max*100).toFixed(1)}%"></i></span></span>
         <span class="amt"><b>${eur(r.t)}</b>${r.t>0?(r.pend>0?`<span>debe ${eur(r.pend)}</span>`:`<span class="paid">pagado</span>`):""}</span>
       </button>
       ${open?`<div class="rbody">${items.length?items.map(m=>`<div class="row" style="justify-content:space-between"><span class="note">${esc(dayName(m.fecha))} · ${esc(m.tipoNombre)}${esc(qtyTxt(m))}</span><span><span class="pill ${m.pagada?"paid":"pend"}">${m.pagada?"cobrada":"pendiente"}</span> <b>${eur(m.importe)}</b></span></div>`).join(""):'<span class="note">Sin multas en este periodo.</span>'}
         ${r.pend>0&&S.canWrite?`<div class="row end"><button type="button" class="btn ok small" data-payall="${esc(r.p.id)}">Cobrar todo (${eur(r.pend)})</button></div>`:""}</div>`:""}
     </li>`;
   }).join("");
+}
+
+function renderMe(){
+  const el=$("#meCard"); const e=email();
+  if(!e || !S.ready.j || !S.jug.length){ el.hidden=true; return; }
+  el.hidden=false;
+  const me=myPlayer();
+  if(me){
+    const mine=S.multas.filter(m=>m.jugador===me.id && inPeriod(m)); const T=totals(mine);
+    el.innerHTML=`<div class="who-line"><span class="row" style="gap:10px;flex-wrap:nowrap"><span class="av ${me.rol==="entrenador"?"coach":""}">${esc(initial(me.nombre))}</span><span><h3>Tus multas</h3><b>${esc(me.nombre)}</b></span></span>
+      <span class="amt"><b>${eur(T.p)}</b><span${T.p?"":' class="paid"'}>${T.p?"por pagar":"todo pagado"}</span></span></div>
+      <p class="note">${mine.length} ${mine.length===1?"apunte":"apuntes"} · ${eur(T.t)} en total${S.aj.inicio?" desde "+esc(monthName(S.aj.inicio)):""}</p>
+      <div class="row"><button type="button" class="btn small ghost" id="myHist">Ver mis multas</button></div>`;
+  } else {
+    const prev=$("#claimSel")?.value||"";
+    const free=activePlayers().filter(p=>!p.email);
+    el.innerHTML=`<h3>¿Quién eres?</h3><p class="note">Vincula tu cuenta (${esc(e)}) con tu nombre para ver lo que debes y recibir avisos de tus multas.</p>
+      ${free.length?`<div class="row"><label class="f">Soy…<select id="claimSel"><option value="">Elige tu nombre</option>${free.map(p=>`<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join("")}</select></label><button type="button" class="btn" id="claimBtn">Soy yo</button></div>`
+        :'<p class="note">Todos los nombres ya tienen una cuenta. Pide a un administrador que te vincule desde «Equipo».</p>'}`;
+    if(prev && $("#claimSel")) $("#claimSel").value=prev;
+  }
 }
 
 function renderAdd(){
@@ -216,9 +241,10 @@ function renderEquipo(){
   const act=activePlayers(), ina=S.jug.filter(p=>p.activo===false).sort(sortPlayers);
   const row=(p,active)=>`<div class="prow">
       <span class="av ${p.rol==="entrenador"?"coach":""}">${esc(initial(p.nombre))}</span>
-      <span class="who" data-namebox="${esc(p.id)}"><b>${esc(p.nombre)}</b><span>${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"} · ${cnt(p.id)} apuntes</span></span>
+      <span class="who" data-namebox="${esc(p.id)}"><b>${esc(p.nombre)}</b><span>${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"} · ${cnt(p.id)} apuntes${S.canWrite?(p.email?" · "+esc(p.email):" · sin cuenta"):(p.email?" · con cuenta":"")}</span></span>
       ${S.canWrite?`<span class="row">
         <button type="button" class="btn small ghost" data-rename="${esc(p.id)}">Renombrar</button>
+        <button type="button" class="btn small ghost" data-mail="${esc(p.id)}">Correo</button>
         ${active?`<button type="button" class="btn small danger" data-remove="${esc(p.id)}">Quitar</button>`
           :`<button type="button" class="btn small ghost" data-restore="${esc(p.id)}">Recuperar</button>${cnt(p.id)?"":`<button type="button" class="btn small danger" data-purge="${esc(p.id)}">Eliminar</button>`}`}
       </span>`:""}
@@ -236,7 +262,7 @@ function renderAjustes(){
   const e=email();
   $("#loginForm").hidden = !!e;
   $("#accountOut").hidden = !e;
-  $("#accountOut").innerHTML = e ? `<span><b>${esc(e)}</b><br><span class="note">${S.canWrite?"Administrador: puedes apuntar y cobrar multas":"Sin permiso para apuntar. Pide a un administrador que añada este correo."}</span></span><button type="button" class="btn small ghost" id="lOut">Salir</button>` : "";
+  $("#accountOut").innerHTML = e ? `<span><b>${esc(e)}</b><br><span class="note">${myPlayer()?"Eres "+esc(myPlayer().nombre)+" · ":"Sin vincular a ningún jugador · "}${S.canWrite?"Administrador: puedes apuntar y cobrar multas":"Puedes ver las multas"}</span></span><span class="row">${myPlayer()?'<button type="button" class="btn small ghost" id="unclaim">Desvincular</button>':""}<button type="button" class="btn small ghost" id="lOut">Salir</button></span>` : "";
   // administradores
   $("#adminCard").hidden = !S.canWrite;
   $("#adminList").innerHTML = (S.aj.admins||[]).map(a=>`<div class="adm"><span>${esc(a)}</span>${String(a).toLowerCase()!==e?`<button type="button" class="btn small danger" data-admdel="${esc(a)}">Quitar</button>`:'<span class="note">tú</span>'}</div>`).join("");
@@ -252,7 +278,8 @@ function renderAjustes(){
       <select id="tu-${esc(t.id)}" aria-label="Cómo se cobra" ${dis}>${["fijo","minuto","cabeza"].map(u=>`<option value="${u}" ${t.unidad===u?"selected":""}>${{fijo:"Una vez",minuto:"Por minuto",cabeza:"Por cabeza"}[u]}</option>`).join("")}</select>
       ${S.canWrite?`<div class="row end"><button type="button" class="btn small ghost" data-tsave="${esc(t.id)}">Guardar</button><button type="button" class="btn small danger" data-tdel="${esc(t.id)}">Borrar</button></div>`:""}
     </div>`).join("") : '<p class="note">'+(S.ready.t?"No hay tipos de multa todavía.":"Cargando…")+'</p>';
-  $("#nLive").checked=S.prefs.live; $("#nFri").checked=S.prefs.fri;
+  $("#nLive").checked=S.prefs.live; $("#nFri").checked=S.prefs.fri; $("#nMine").checked=!!S.prefs.mine;
+  $("#nMineWrap").hidden=!myPlayer();
   renderPush();
 }
 
@@ -302,7 +329,7 @@ async function enablePush(){
     messaging = messaging || M.getMessaging(app);
     const token = await M.getToken(messaging, { vapidKey: self.FIREBASE_VAPID_KEY, serviceWorkerRegistration: reg });
     if(!token) throw new Error("sin token");
-    await F.setDoc(dref("tokens", token), { uid: S.user?.uid||"", viernes: !!S.prefs.fri, creado: Date.now(), ios: isIOS });
+    await F.setDoc(dref("tokens", token), tokenData());
     store.set("multas.pushToken", token);
     toast("Notificaciones activadas en este móvil");
     listenForeground();
@@ -321,9 +348,10 @@ async function listenForeground(){
   // Con la app abierta ya avisamos con el aviso en pantalla; aquí solo el recordatorio del viernes.
   M.onMessage(messaging, p=>{ if(p?.data?.tipo==="viernes") toast(p.notification?.body||"Hoy toca tiro de medio campo"); });
 }
+function tokenData(){ return { uid:S.user?.uid||"", jugador: myPlayer()?.id||"", solo_mias: !!(S.prefs.mine && myPlayer()), viernes: !!S.prefs.fri, creado: Date.now(), ios: isIOS }; }
 async function syncTokenPrefs(){
   const tok=store.get("multas.pushToken","");
-  if(tok) try{ await F.setDoc(dref("tokens",tok), { uid:S.user?.uid||"", viernes: !!S.prefs.fri, creado: Date.now(), ios: isIOS }); }catch{}
+  if(tok) try{ await F.setDoc(dref("tokens",tok), tokenData()); }catch{}
 }
 
 /* ---------- eventos ---------- */
@@ -332,6 +360,18 @@ document.addEventListener("click", e=>{
   const d=t.dataset;
   if(t.id==="hideInstall"){ store.set("multas.hideInstall",true); renderInstall(); return; }
   if(t.id==="doInstall"&&installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; renderInstall(); }); return; }
+  if(t.id==="claimBtn"){ const id=$("#claimSel")?.value; const p=playerById(id); if(!p){ toast("Elige tu nombre"); return; }
+      run(()=>F.updateDoc(dref("jugadores",id),{email:email()}),"Cuenta vinculada: eres "+p.nombre); return; }
+  if(t.id==="unclaim"){ const me=myPlayer(); if(me) armed(t,"¿Seguro?",()=>run(()=>F.updateDoc(dref("jugadores",me.id),{email:""}),"Cuenta desvinculada")); return; }
+  if(t.id==="myHist"){ const me=myPlayer(); if(!me) return; renderHist(); $("#fPlayer").value=me.id; location.hash="historial"; renderHist(); return; }
+  if(d.mail){ const box=document.querySelector(`[data-namebox="${CSS.escape(d.mail)}"]`); const p=playerById(d.mail); if(!box||!p) return;
+      box.innerHTML=`<div class="row"><input type="text" id="ml-${esc(p.id)}" value="${esc(p.email||"")}" inputmode="email" autocapitalize="off" placeholder="correo@ejemplo.com" aria-label="Correo de ${esc(p.nombre)}" style="flex:1;min-width:150px"><button type="button" class="btn small" data-mailsave="${esc(p.id)}">Guardar</button></div><span class="note">Déjalo vacío para quitar la cuenta.</span>`;
+      box.querySelector("input").focus(); return; }
+  if(d.mailsave){ const v=document.getElementById("ml-"+d.mailsave).value.trim().toLowerCase();
+      if(v && !/^\S+@\S+\.\S+$/.test(v)){ toast("Escribe un correo válido"); return; }
+      const other=v && S.jug.find(p=>p.id!==d.mailsave && String(p.email||"").toLowerCase()===v);
+      if(other){ toast("Ese correo ya es de "+other.nombre); return; }
+      run(()=>F.updateDoc(dref("jugadores",d.mailsave),{email:v}), v?"Correo guardado":"Cuenta quitada"); return; }
   if(t.id==="seedBtn"){ t.disabled=true; seedTeam().finally(()=>{ t.disabled=false; }); return; }
   if(t.id==="lOut"){ run(()=>A.signOut(auth),"Has salido"); return; }
   if(d.rank!==undefined){ S.openRank = S.openRank===d.rank?null:d.rank; renderResumen(); return; }
@@ -363,6 +403,7 @@ $("#fPlayer").addEventListener("change",renderHist);
 $("#fState").addEventListener("change",renderHist);
 $("#fOld").addEventListener("change",renderHist);
 $("#nLive").addEventListener("change",e=>{ S.prefs.live=e.target.checked; store.set("multas.prefs",S.prefs); });
+$("#nMine").addEventListener("change",e=>{ S.prefs.mine=e.target.checked; store.set("multas.prefs",S.prefs); syncTokenPrefs(); });
 $("#nFri").addEventListener("change",e=>{ S.prefs.fri=e.target.checked; store.set("multas.prefs",S.prefs); renderResumen(); syncTokenPrefs(); });
 $("#fridayBtn").addEventListener("click",()=>{ const t=S.tipos.find(x=>/medio campo/i.test(x.nombre)); if(t) S.selType=t.id; S.selPlayers.clear(); location.hash="anadir"; renderAdd(); });
 $("#pushBtn").addEventListener("click",()=>{ $("#pushBtn").dataset.on ? disablePush() : enablePush(); });
@@ -438,7 +479,9 @@ function subscribe(){
   const done=snap=>{ if(!snap.metadata.fromCache){ clearTimeout(timer); setStatus(""); } };
   const fail=e=>{ console.error(e); clearTimeout(timer); setStatus("No se pueden leer los datos: "+errMsg(e)); };
   let firstMultas=true;
-  unsubs.push(F.onSnapshot(F.collection(db,"jugadores"), s=>{ S.jug=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.j=true; done(s); renderAll(); }, fail));
+  unsubs.push(F.onSnapshot(F.collection(db,"jugadores"), s=>{ S.jug=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.j=true; done(s);
+    const mid=myPlayer()?.id||""; if(mid!==S.meId){ S.meId=mid; syncTokenPrefs(); }
+    renderAll(); }, fail));
   unsubs.push(F.onSnapshot(F.collection(db,"tipos"), s=>{ S.tipos=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.t=true; done(s); renderAll(); }, fail));
   unsubs.push(F.onSnapshot(dref("ajustes","general"), s=>{
     S.ajExists = s.exists() ? true : (s.metadata.fromCache ? S.ajExists : false);

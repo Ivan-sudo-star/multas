@@ -41,6 +41,7 @@
     <p class="note">Todavía no hay equipo creado. Al configurarlo serás el primer administrador y se cargarán la plantilla y las multas del grupo.</p>
     <button type="button" class="btn" id="setupBtn">Configurar el equipo</button>
   </div>
+  <div id="meCard" class="card" hidden></div>
   <div>
     <h2>Clasificación de multas</h2>
     <p class="sub" id="periodText">Cargando datos del equipo…</p>
@@ -155,6 +156,7 @@
   <div class="card">
     <h3>Avisos</h3>
     <div class="who-line"><span id="pushState" class="note">Notificaciones del móvil: desactivadas</span><button type="button" class="btn small" id="pushBtn">Activar notificaciones</button></div>
+    <label class="switch" id="nMineWrap" hidden><span>Avisarme solo de mis multas</span><input type="checkbox" id="nMine"></label>
     <label class="switch"><span>Avisarme dentro de la app cuando alguien apunte una multa</span><input type="checkbox" id="nLive"></label>
     <label class="switch"><span>Recordatorio del tiro de medio campo los viernes</span><input type="checkbox" id="nFri"></label>
     <p class="note">Las notificaciones del móvil llegan aunque la app esté cerrada. En iPhone primero hay que instalar la app en la pantalla de inicio (iOS 16.4 o posterior).</p>

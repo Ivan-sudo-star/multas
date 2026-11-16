@@ -14,7 +14,17 @@ service cloud.firestore {
 
     // Todo el que abre la app (aunque no tenga cuenta) puede ver las multas.
     // Solo los administradores pueden cambiarlas.
-    match /jugadores/{id} { allow read: if signedIn(); allow write: if isAdmin(); }
+    match /jugadores/{id} {
+      allow read: if signedIn();
+      allow create, delete: if isAdmin();
+      // Un jugador puede vincular su cuenta a un nombre libre, o desvincularse. Nada más.
+      allow update: if isAdmin() || (
+        hasEmail() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email']) &&
+        ((resource.data.get('email', '') == '' && request.resource.data.email == myEmail()) ||
+         (resource.data.get('email', '') == myEmail() && request.resource.data.email == ''))
+      );
+    }
     match /tipos/{id}     { allow read: if signedIn(); allow write: if isAdmin(); }
     match /multas/{id}    { allow read: if signedIn(); allow write: if isAdmin(); }
 

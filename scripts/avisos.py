@@ -44,17 +44,21 @@ def eur(n):
     return (str(int(n)) if n == int(n) else f"{n:.2f}".replace(".", ",")) + " €"
 
 
+def webpush_cfg(view):
+    if not APP_URL.startswith("https://"):
+        return None
+    return messaging.WebpushConfig(
+        notification=messaging.WebpushNotification(icon=APP_URL + "icons/icon-192.png"),
+        fcm_options=messaging.WebpushFCMOptions(link=APP_URL + "#" + view),
+    )
+
+
 def send(tokens, title, body, data=None, view="historial"):
     """Envía a todos los móviles y borra los que ya no existen."""
     sent, dead = 0, []
     for i in range(0, len(tokens), 500):
         chunk = tokens[i:i + 500]
-        webpush = None
-        if APP_URL.startswith("https://"):
-            webpush = messaging.WebpushConfig(
-                notification=messaging.WebpushNotification(icon=APP_URL + "icons/icon-192.png"),
-                fcm_options=messaging.WebpushFCMOptions(link=APP_URL + "#" + view),
-            )
+        webpush = webpush_cfg(view)
         msg = messaging.MulticastMessage(
             tokens=chunk,
             notification=messaging.Notification(title=title, body=body),
@@ -75,32 +79,68 @@ def all_tokens():
     return [(d.id, d.to_dict() or {}) for d in db.collection("tokens").stream()]
 
 
+def describe(m):
+    extra = f" ({m.get('cantidad')} min)" if m.get("unidad") == "minuto" else (f" ×{m.get('cantidad')}" if (m.get("cantidad") or 1) > 1 else "")
+    return f"{m.get('tipoNombre', '')}{extra} · {eur(m.get('importe'))}"
+
+
 def avisar_multas():
     nuevas = list(db.collection("multas").where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
     if not nuevas:
         print("No hay multas nuevas")
         return
     multas = [d.to_dict() for d in nuevas]
-    autores = {m.get("autor", "") for m in multas}
-    # No avisar a quien la ha puesto (si todas son de la misma persona)
-    toks = [t for t, info in all_tokens() if not (len(autores) == 1 and info.get("uid") in autores)]
-    if len(multas) == 1:
-        m = multas[0]
-        extra = f" ({m.get('cantidad')} min)" if m.get("unidad") == "minuto" else (f" ×{m.get('cantidad')}" if (m.get("cantidad") or 1) > 1 else "")
-        title = "Nueva multa"
-        body = f"{m.get('jugadorNombre', '')} · {m.get('tipoNombre', '')}{extra} · {eur(m.get('importe'))}"
-    else:
-        por = {}
-        for m in multas:
-            por[m.get("jugadorNombre", "?")] = por.get(m.get("jugadorNombre", "?"), 0) + float(m.get("importe") or 0)
-        title = f"{len(multas)} multas nuevas"
-        body = ", ".join(f"{n} {eur(v)}" for n, v in sorted(por.items(), key=lambda x: -x[1]))
-    if toks:
-        send(toks, title, body[:200], {"tipo": "multa"})
+    mensajes = []
+    for tok, info in all_tokens():
+        uid, jug = info.get("uid", ""), info.get("jugador", "")
+        mias = [m for m in multas if jug and m.get("jugador") == jug]
+        if info.get("solo_mias") and not mias:
+            continue
+        # A quien ha puesto las multas no se le avisa (salvo si son suyas)
+        if not mias and all(m.get("autor") == uid for m in multas):
+            continue
+        if mias:
+            title = "Te han puesto una multa" if len(mias) == 1 else f"Te han puesto {len(mias)} multas"
+            body = " / ".join(describe(m) for m in mias)
+            otras = len(multas) - len(mias)
+            if otras:
+                body += f" (+{otras} al resto)"
+        elif len(multas) == 1:
+            m = multas[0]
+            title, body = "Nueva multa", f"{m.get('jugadorNombre', '')} · {describe(m)}"
+        else:
+            por = {}
+            for m in multas:
+                n = m.get("jugadorNombre", "?")
+                por[n] = por.get(n, 0) + float(m.get("importe") or 0)
+            title = f"{len(multas)} multas nuevas"
+            body = ", ".join(f"{n} {eur(v)}" for n, v in sorted(por.items(), key=lambda x: -x[1]))
+        mensajes.append((tok, title, body[:200]))
+    send_each(mensajes)
     batch = db.batch()
     for d in nuevas:
         batch.update(d.reference, {"notificada": True})
     batch.commit()
+
+
+def send_each(mensajes, data=None, view="historial"):
+    """Un mensaje distinto para cada móvil."""
+    if not mensajes:
+        print("Nadie a quien avisar")
+        return
+    sent, dead = 0, []
+    for i in range(0, len(mensajes), 500):
+        chunk = mensajes[i:i + 500]
+        msgs = [messaging.Message(token=tok, notification=messaging.Notification(title=t, body=b),
+                                  data=data or {"tipo": "multa"}, webpush=webpush_cfg(view)) for tok, t, b in chunk]
+        res = messaging.send_each(msgs)
+        sent += res.success_count
+        for (tok, _, _), r in zip(chunk, res.responses):
+            if not r.success and isinstance(r.exception, (messaging.UnregisteredError, messaging.SenderIdMismatchError)):
+                dead.append(tok)
+    for tok in dead:
+        db.collection("tokens").document(tok).delete()
+    print(f"Enviadas {sent}, borrados {len(dead)} móviles inactivos")
 
 
 def avisar_viernes():
