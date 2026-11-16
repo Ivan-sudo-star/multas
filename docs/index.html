@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Multas Caixa Ontinyent</title>
+<meta name="description" content="Multas del equipo Caixa Ontinyent">
+<meta name="theme-color" content="#29297a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Multas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="crest" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="#f03c02"/><path d="M3 16h26M16 3v26M7 7c4 4 4 14 0 18M25 7c-4 4-4 14 0 18" stroke="#29297a" stroke-width="1.6" fill="none"/></svg></div>
+  <div class="brand"><b>Multas</b><span>Caixa Ontinyent</span></div>
+  <div class="pot"><small id="potLabel">Bote</small><strong id="potTotal">0 €</strong></div>
+</div></header>
+
+<main>
+<!-- Configuración pendiente -->
+<section id="v-config" class="view" hidden><div class="wrap setup">
+  <div class="card"><h2>Falta conectar la base de datos</h2>
+  <p class="note">Abre <b>firebase-config.js</b> y pega los datos de tu proyecto de Firebase. Los pasos están en GUIA.md.</p></div>
+</div></section>
+
+<!-- RESUMEN -->
+<section id="v-resumen" class="view"><div class="wrap">
+  <div id="installBanner" class="info" hidden></div>
+  <div id="fridayBanner" class="banner" hidden><p>Hoy es viernes: tiro de medio campo. El último paga 2 €.</p><button type="button" id="fridayBtn">Apuntar al último</button></div>
+  <div id="status" class="info" hidden></div>
+  <div id="setupCard" class="card" hidden>
+    <h3>Primer arranque</h3>
+    <p class="note">Todavía no hay equipo creado. Al configurarlo serás el primer administrador y se cargarán la plantilla y las multas del grupo.</p>
+    <button type="button" class="btn" id="setupBtn">Configurar el equipo</button>
+  </div>
+  <div>
+    <h2>Clasificación de multas</h2>
+    <p class="sub" id="periodText">Cargando datos del equipo…</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><small>Bote total</small><strong id="sTotal">0 €</strong></div>
+    <div class="stat hot"><small>Por cobrar</small><strong id="sPend">0 €</strong></div>
+    <div class="stat good"><small>Cobrado</small><strong id="sPaid">0 €</strong></div>
+  </div>
+  <ol class="rank" id="rank"></ol>
+  <button type="button" class="btn ghost" id="copyBtn">Copiar resumen para WhatsApp</button>
+  <p class="note" id="countedBy"></p>
+</div></section>
+
+<!-- AÑADIR -->
+<section id="v-anadir" class="view" hidden><div class="wrap">
+  <div><h2>Poner multa</h2><p class="sub">Elige la falta, a quién y cuántas veces. Puedes marcar varios jugadores a la vez (técnica de banquillo, por ejemplo).</p></div>
+  <div id="roAdd" class="info" hidden>Solo puedes ver las multas. Para apuntarlas entra como administrador en Ajustes.</div>
+  <form id="addForm" class="card" novalidate>
+    <h3>1 · Falta</h3>
+    <div class="types" id="typeGrid"></div>
+    <h3>2 · Jugadores</h3>
+    <div class="chips" id="playerChips"></div>
+    <div class="row">
+      <label class="f" id="qtyWrap"><span id="qtyLabel">Veces</span>
+        <span class="stepper"><button type="button" id="qtyMinus" aria-label="Una menos">−</button><input type="number" id="qty" min="1" max="99" step="1" value="1" inputmode="numeric"><button type="button" id="qtyPlus" aria-label="Una más">+</button></span>
+      </label>
+      <label class="f">Fecha<input type="date" id="fecha"></label>
+    </div>
+    <label class="f">Nota (opcional)<input type="text" id="nota" maxlength="120" placeholder="Ej.: llegó a las 20:15"></label>
+    <div class="preview"><span id="previewText">Elige una falta y al menos un jugador</span><b id="previewAmt">0 €</b></div>
+    <button type="submit" class="btn big" id="addBtn" disabled>Poner multa</button>
+  </form>
+</div></section>
+
+<!-- HISTORIAL -->
+<section id="v-historial" class="view" hidden><div class="wrap">
+  <div><h2>Historial</h2><p class="sub">Las multas se pagan en efectivo. Marca cada una como cobrada cuando te den el dinero.</p></div>
+  <div class="row">
+    <label class="f">Jugador<select id="fPlayer"><option value="">Todos</option></select></label>
+    <label class="f">Estado<select id="fState"><option value="">Todas</option><option value="pend">Por cobrar</option><option value="paid">Cobradas</option></select></label>
+  </div>
+  <label class="switch note"><span>Mostrar también las anteriores al inicio del conteo</span><input type="checkbox" id="fOld"></label>
+  <div id="histList"></div>
+</div></section>
+
+<!-- EQUIPO -->
+<section id="v-equipo" class="view" hidden><div class="wrap">
+  <div><h2>Plantilla</h2><p class="sub">Añade o quita personas. Quien se va del equipo conserva su historial.</p></div>
+  <form id="playerForm" class="card" novalidate>
+    <h3>Añadir persona</h3>
+    <div class="row">
+      <label class="f">Nombre<input type="text" id="pName" maxlength="40" placeholder="Ej.: Pau Ferrer"></label>
+      <label class="f" style="flex:0 1 150px">Rol<select id="pRole"><option value="jugador">Jugador/a</option><option value="entrenador">Entrenador/a</option></select></label>
+    </div>
+    <button type="submit" class="btn" id="pAdd">Añadir al equipo</button>
+  </form>
+  <div class="card"><h3>En el equipo</h3><div id="activeList"></div></div>
+  <div class="card" id="inactiveCard" hidden><h3>Ya no están</h3><div id="inactiveList"></div></div>
+</div></section>
+
+<!-- AJUSTES -->
+<section id="v-ajustes" class="view" hidden><div class="wrap">
+  <div><h2>Ajustes</h2><p class="sub">Cuenta, periodo del conteo, tipos de multa y avisos.</p></div>
+
+  <div class="card" id="accountCard">
+    <h3>Cuenta</h3>
+    <div id="accountOut" class="who-line"></div>
+    <form id="loginForm" novalidate style="display:flex;flex-direction:column;gap:10px">
+      <p class="note">Sin entrar puedes ver las multas. Para apuntarlas, entra con una cuenta que un administrador haya autorizado.</p>
+      <label class="f">Correo<input type="text" id="lEmail" autocomplete="username" inputmode="email" autocapitalize="off"></label>
+      <label class="f">Contraseña<input type="password" id="lPass" autocomplete="current-password" style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;width:100%;font-size:16px"></label>
+      <div class="row">
+        <button type="submit" class="btn" id="lIn">Entrar</button>
+        <button type="button" class="btn ghost" id="lNew">Crear cuenta</button>
+        <button type="button" class="btn ghost small" id="lForgot">He olvidado la contraseña</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card" id="adminCard" hidden>
+    <h3>Administradores</h3>
+    <p class="note">Estos correos pueden apuntar y cobrar multas. Cada persona crea su cuenta en «Cuenta» con el mismo correo.</p>
+    <div id="adminList"></div>
+    <form id="adminForm" class="row" novalidate>
+      <label class="f">Añadir correo<input type="text" id="aEmail" inputmode="email" autocapitalize="off"></label>
+      <button type="submit" class="btn">Añadir</button>
+    </form>
+  </div>
+
+  <form id="periodForm" class="card" novalidate>
+    <h3>Conteo</h3>
+    <div class="row">
+      <label class="f">Contar desde el mes<input type="month" id="inicio"></label>
+      <label class="f">Lleva el conteo<input type="text" id="contador" maxlength="40"></label>
+    </div>
+    <p class="note">Las multas anteriores a ese mes no suman en el bote ni en la clasificación, pero siguen en el historial. Déjalo vacío para contar todo.</p>
+    <button type="submit" class="btn" id="periodSave">Guardar conteo</button>
+  </form>
+
+  <div class="card">
+    <h3>Tipos de multa</h3>
+    <div id="typeList"></div>
+    <form id="typeForm" class="row" novalidate style="border-top:1px dashed var(--line);padding-top:12px">
+      <label class="f">Nueva falta<input type="text" id="tName" maxlength="50" placeholder="Ej.: Olvidar la equipación"></label>
+      <label class="f" style="flex:0 1 90px">€<input type="number" id="tPrice" min="0" step="0.5" value="1" inputmode="decimal"></label>
+      <label class="f" style="flex:0 1 150px">Se cobra<select id="tUnit"><option value="fijo">Una vez</option><option value="minuto">Por minuto</option><option value="cabeza">Por cabeza</option></select></label>
+      <button type="submit" class="btn" id="tAdd">Añadir</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Avisos</h3>
+    <div class="who-line"><span id="pushState" class="note">Notificaciones del móvil: desactivadas</span><button type="button" class="btn small" id="pushBtn">Activar notificaciones</button></div>
+    <label class="switch"><span>Avisarme dentro de la app cuando alguien apunte una multa</span><input type="checkbox" id="nLive"></label>
+    <label class="switch"><span>Recordatorio del tiro de medio campo los viernes</span><input type="checkbox" id="nFri"></label>
+    <p class="note">Las notificaciones del móvil llegan aunque la app esté cerrada. En iPhone primero hay que instalar la app en la pantalla de inicio (iOS 16.4 o posterior).</p>
+  </div>
+</div></section>
+</main>
+
+<nav class="tabs" aria-label="Secciones"><div class="in">
+  <a href="#resumen" data-v="resumen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Resumen</a>
+  <a href="#historial" data-v="historial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Historial<span class="badge" id="newBadge" hidden>0</span></a>
+  <a href="#anadir" data-v="anadir" class="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Multa</a>
+  <a href="#equipo" data-v="equipo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 010 7M18 14.8c2 .7 3.2 2.5 3.6 5.2"/></svg>Equipo</a>
+  <a href="#ajustes" data-v="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Ajustes</a>
+</div></nav>
+
+<script src="firebase-config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
