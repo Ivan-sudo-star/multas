@@ -17,8 +17,22 @@ if not os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip():
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
 
-cred =credentials.Certificate(json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"]))
-firebase_admin.initialize_app(cred)
+def fail(msg):
+    # "::error::" hace que GitHub muestre el mensaje en el resumen de la ejecución
+    print("::error::" + msg)
+    sys.exit(1)
+
+
+try:
+    info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+except Exception as e:
+    fail(f"El secreto FIREBASE_SERVICE_ACCOUNT no es un JSON válido ({e}). Vuelve a pegar TODO el contenido del archivo .json, desde la primera {{ hasta la última }}.")
+if info.get("type") != "service_account" or "private_key" not in info:
+    fail("El secreto FIREBASE_SERVICE_ACCOUNT no parece la clave de una cuenta de servicio (falta type/private_key).")
+try:
+    firebase_admin.initialize_app(credentials.Certificate(info))
+except Exception as e:
+    fail(f"No se pudo usar la clave de la cuenta de servicio: {e}")
 db = firestore.client()
 APP_URL = os.environ.get("APP_URL", "").strip()
 if APP_URL and not APP_URL.endswith("/"):
@@ -97,4 +111,7 @@ def avisar_viernes():
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "multas"
-    avisar_viernes() if mode == "viernes" else avisar_multas()
+    try:
+        avisar_viernes() if mode == "viernes" else avisar_multas()
+    except Exception as e:
+        fail(f"{type(e).__name__}: {str(e)[:500]}")
