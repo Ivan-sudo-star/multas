@@ -223,7 +223,9 @@ function renderEquipo(){
           :`<button type="button" class="btn small ghost" data-restore="${esc(p.id)}">Recuperar</button>${cnt(p.id)?"":`<button type="button" class="btn small danger" data-purge="${esc(p.id)}">Eliminar</button>`}`}
       </span>`:""}
     </div>`;
-  $("#activeList").innerHTML = act.length?act.map(p=>row(p,true)).join(""):'<p class="note">'+(S.ready.j?"Todavía no hay nadie en el equipo.":"Cargando…")+'</p>';
+  const needSeed = S.canWrite && S.ready.j && S.ready.t && (!S.jug.length || !S.tipos.length);
+  $("#activeList").innerHTML = (act.length?act.map(p=>row(p,true)).join(""):'<p class="note">'+(S.ready.j?"Todavía no hay nadie en el equipo.":"Cargando…")+'</p>')
+    + (needSeed?'<button type="button" class="btn" id="seedBtn" style="margin-top:8px">Cargar plantilla y multas del Caixa Ontinyent</button>':"");
   $("#inactiveCard").hidden=!ina.length;
   $("#inactiveList").innerHTML=ina.map(p=>row(p,false)).join("");
 }
@@ -330,6 +332,7 @@ document.addEventListener("click", e=>{
   const d=t.dataset;
   if(t.id==="hideInstall"){ store.set("multas.hideInstall",true); renderInstall(); return; }
   if(t.id==="doInstall"&&installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; renderInstall(); }); return; }
+  if(t.id==="seedBtn"){ t.disabled=true; seedTeam().finally(()=>{ t.disabled=false; }); return; }
   if(t.id==="lOut"){ run(()=>A.signOut(auth),"Has salido"); return; }
   if(d.rank!==undefined){ S.openRank = S.openRank===d.rank?null:d.rank; renderResumen(); return; }
   if(d.type!==undefined){ S.selType=d.type; renderAdd(); return; }
@@ -415,12 +418,15 @@ $("#setupBtn").addEventListener("click", async ()=>{
   const btn=$("#setupBtn"); btn.disabled=true;
   const ok = await run(()=>F.setDoc(dref("ajustes","general"),{inicio:"", contador:"Ivan", admins:[email()]}));
   if(!ok){ btn.disabled=false; return; }
-  const b=F.writeBatch(db);
-  SEED_PLAYERS.forEach(([nombre,rol],i)=>b.set(dref("jugadores","p"+pad(i+1)),{nombre,rol,activo:true,creado:Date.now()}));
-  SEED_TYPES.forEach(([nombre,precio,unidad],i)=>b.set(dref("tipos","t"+(i+1)),{nombre,precio,unidad,orden:i+1}));
-  await run(()=>b.commit(),"Equipo configurado");
+  await seedTeam();
   btn.disabled=false;
 });
+async function seedTeam(){
+  const b=F.writeBatch(db);
+  if(!S.jug.length) SEED_PLAYERS.forEach(([nombre,rol],i)=>b.set(dref("jugadores","p"+pad(i+1)),{nombre,rol,activo:true,creado:Date.now()}));
+  if(!S.tipos.length) SEED_TYPES.forEach(([nombre,precio,unidad],i)=>b.set(dref("tipos","t"+(i+1)),{nombre,precio,unidad,orden:i+1}));
+  return run(()=>b.commit(),"Plantilla y multas cargadas");
+}
 addEventListener("hashchange",route);
 
 /* ---------- conexión con los datos ---------- */
