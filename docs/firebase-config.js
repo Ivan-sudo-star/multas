@@ -10,4 +10,4 @@ self.FIREBASE_CONFIG = {
 };
 
 // Clave para notificaciones push (ver GUIA.md, paso 6). Déjala vacía si no las usas.
-self.FIREBASE_VAPID_KEY = "";
+self.FIREBASE_VAPID_KEY = "BK_ksynZ_EVEpD8mm1Ssv6L5GNyyGKM7akcNMLHsSU0zQInMtCp2Bc6kM9ePesIZ-NIx9C-a-pRJTEeCbSsyhVc";
