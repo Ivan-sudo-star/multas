@@ -82,7 +82,7 @@ def send(tokens, title, body, data=None, view="historial"):
                 dead.append(tok)
     for tok in dead:
         db.collection("tokens").document(tok).delete()
-    print(f"Enviadas {sent}, borrados {len(dead)} móviles inactivos")
+    print(f"::notice::Notificaciones enviadas: {sent}. Móviles dados de baja: {len(dead)}")
 
 
 def all_tokens():
@@ -127,7 +127,7 @@ def avisar_multas():
             batch.update(d.reference, {"notificada": True})
         batch.commit()
     if not total:
-        print("Nada que avisar")
+        print("::notice::Nada que avisar")
 
 
 def avisar_equipo(nombre, multas, tokens):
@@ -165,7 +165,7 @@ def avisar_equipo(nombre, multas, tokens):
 def send_each(mensajes, data=None, view="historial"):
     """Un mensaje distinto para cada móvil."""
     if not mensajes:
-        print("Nadie a quien avisar")
+        print("::notice::Nadie a quien avisar (ningún móvil con notificaciones activadas en este equipo)")
         return
     sent, dead = 0, []
     for i in range(0, len(mensajes), 500):
@@ -179,7 +179,7 @@ def send_each(mensajes, data=None, view="historial"):
                 dead.append(tok)
     for tok in dead:
         db.collection("tokens").document(tok).delete()
-    print(f"Enviadas {sent}, borrados {len(dead)} móviles inactivos")
+    print(f"::notice::Notificaciones enviadas: {sent}. Móviles dados de baja: {len(dead)}")
 
 
 def avisar_tablon(team, toks):
