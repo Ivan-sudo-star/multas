@@ -104,6 +104,8 @@ const typeById = id => S.tipos.find(t=>t.id===id);
 function sortPlayers(a,b){ if((a.rol==="entrenador")!==(b.rol==="entrenador")) return a.rol==="entrenador"?1:-1; return (a.nombre||"").localeCompare(b.nombre||"","es"); }
 const activePlayers = () => S.jug.filter(p=>p.activo!==false).sort(sortPlayers);
 const initial = n => (n||"?").trim().charAt(0).toUpperCase();
+const hasDor = p => p && p.dorsal!==undefined && p.dorsal!==null && p.dorsal!=="";
+const avTxt = p => hasDor(p) ? String(p.dorsal) : initial(p?.nombre);
 const myPlayer = () => { const e=email(); return e ? S.jug.find(p=>String(p.email||"").toLowerCase()===e) : null; };
 const isNew = m => (m.creado||0) > S.lastSeen && m.autor !== (S.user&&S.user.uid);
 function totals(list){ let t=0,p=0; list.forEach(m=>{ t+=+m.importe||0; if(!m.pagada) p+=+m.importe||0; }); return {t, p, c:t-p}; }
@@ -165,7 +167,7 @@ function renderResumen(){
     return `<li class="rrow ${isMe?"me":""}">
       <button type="button" class="rhead" data-rank="${esc(r.p.id)}" aria-expanded="${open}">
         <span class="pos">${r.t>0?i+1:"–"}</span>
-        <span class="av ${r.p.rol==="entrenador"?"coach":""}">${esc(initial(r.p.nombre))}</span>
+        <span class="av ${r.p.rol==="entrenador"?"coach":""} ${hasDor(r.p)?"num":""}">${esc(avTxt(r.p))}</span>
         <span class="who"><b>${esc(r.p.nombre)}${isMe?' <span class="pill newp">tú</span>':""}</b><span>${r.n} ${r.n===1?"multa":"multas"}${r.p.rol==="entrenador"?" · entrenador":""}</span><span class="bar"><i style="width:${(r.t/max*100).toFixed(1)}%"></i></span></span>
         <span class="amt"><b>${eur(r.t)}</b>${r.t>0?(r.pend>0?`<span>debe ${eur(r.pend)}</span>`:`<span class="paid">pagado</span>`):""}</span>
       </button>
@@ -205,7 +207,7 @@ function renderMe(){
   const me=myPlayer();
   if(me){
     const mine=S.multas.filter(m=>m.jugador===me.id && inPeriod(m)); const T=totals(mine);
-    el.innerHTML=`<div class="who-line"><span class="row" style="gap:10px;flex-wrap:nowrap"><span class="av ${me.rol==="entrenador"?"coach":""}">${esc(initial(me.nombre))}</span><span><h3>Tus multas</h3><b>${esc(me.nombre)}</b></span></span>
+    el.innerHTML=`<div class="who-line"><span class="row" style="gap:10px;flex-wrap:nowrap"><span class="av ${me.rol==="entrenador"?"coach":""} ${hasDor(me)?"num":""}">${esc(avTxt(me))}</span><span><h3>Tus multas</h3><b>${esc(me.nombre)}</b></span></span>
       <span class="amt"><b>${eur(T.p)}</b><span${T.p?"":' class="paid"'}>${T.p?"por pagar":"todo pagado"}</span></span></div>
       <p class="note">${mine.length} ${mine.length===1?"apunte":"apuntes"} · ${eur(T.t)} en total${S.aj.inicio?" desde "+esc(monthName(S.aj.inicio)):""}</p>
       ${pagoAviso(me)}
@@ -386,10 +388,10 @@ function renderEquipo(){
   const cnt=id=>S.multas.filter(m=>m.jugador===id).length;
   const act=activePlayers(), ina=S.jug.filter(p=>p.activo===false).sort(sortPlayers);
   const row=(p,active)=>`<div class="prow">
-      <span class="av ${p.rol==="entrenador"?"coach":""}">${esc(initial(p.nombre))}</span>
+      <span class="av ${p.rol==="entrenador"?"coach":""} ${hasDor(p)?"num":""}">${esc(avTxt(p))}</span>
       <span class="who" data-namebox="${esc(p.id)}"><b>${esc(p.nombre)}</b><span>${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"} · ${cnt(p.id)} apuntes${S.canWrite?(p.email?" · "+esc(p.email):" · sin cuenta"):(p.email?" · con cuenta":"")}</span></span>
       ${S.canWrite?`<span class="row">
-        <button type="button" class="btn small ghost" data-rename="${esc(p.id)}">Renombrar</button>
+        <button type="button" class="btn small ghost" data-rename="${esc(p.id)}">✏️ Nombre y dorsal</button>
         <button type="button" class="btn small ghost" data-mail="${esc(p.id)}">Correo</button>
         ${active?`<button type="button" class="btn small danger" data-remove="${esc(p.id)}">Quitar</button>`
           :`<button type="button" class="btn small ghost" data-restore="${esc(p.id)}">Recuperar</button>${cnt(p.id)?"":`<button type="button" class="btn small danger" data-purge="${esc(p.id)}">Eliminar</button>`}`}
@@ -602,10 +604,11 @@ document.addEventListener("click", e=>{
   if(d.restore){ run(()=>F.updateDoc(dref("jugadores",d.restore),{activo:true}),"De vuelta en el equipo"); return; }
   if(d.purge){ armed(t,"¿Eliminar? Toca otra vez",()=>run(()=>F.deleteDoc(dref("jugadores",d.purge)),"Persona eliminada")); return; }
   if(d.rename){ const box=document.querySelector(`[data-namebox="${CSS.escape(d.rename)}"]`); const p=playerById(d.rename); if(!box||!p) return;
-      box.innerHTML=`<div class="row"><input type="text" id="rn-${esc(p.id)}" value="${esc(p.nombre)}" maxlength="40" aria-label="Nuevo nombre" style="flex:1;min-width:120px"><button type="button" class="btn small" data-rnsave="${esc(p.id)}">Guardar</button></div>`;
+      box.innerHTML=`<div class="row"><input type="text" class="dorin" id="rd-${esc(p.id)}" value="${esc(hasDor(p)?p.dorsal:"")}" maxlength="2" inputmode="numeric" placeholder="Nº" aria-label="Dorsal"><input type="text" id="rn-${esc(p.id)}" value="${esc(p.nombre)}" maxlength="40" aria-label="Nuevo nombre" style="flex:1;min-width:120px"><button type="button" class="btn small" data-rnsave="${esc(p.id)}">Guardar</button></div>`;
       box.querySelector("input").focus(); return; }
   if(d.rnsave){ const v=document.getElementById("rn-"+d.rnsave).value.trim(); if(!v){ toast("Escribe un nombre"); return; }
-      run(()=>F.updateDoc(dref("jugadores",d.rnsave),{nombre:v.toUpperCase()}),"Nombre cambiado"); return; }
+      const dv=(document.getElementById("rd-"+d.rnsave)?.value||"").replace(/\D/g,"").slice(0,2);
+      run(()=>F.updateDoc(dref("jugadores",d.rnsave),{nombre:v.toUpperCase(), dorsal:dv||null}),"Guardado"); return; }
   if(d.tsave){ const id=d.tsave; const nombre=document.getElementById("tn-"+id).value.trim(); const precio=+document.getElementById("tp-"+id).value; const unidad=document.getElementById("tu-"+id).value;
       if(!nombre||!(precio>=0)){ toast("Pon un nombre y un precio válido"); return; }
       run(()=>F.updateDoc(dref("tipos",id),{nombre,precio,unidad}),"Tipo de multa guardado"); return; }
@@ -1067,6 +1070,8 @@ async function importFBCV(){
       b.set(F.doc(col("eventos"),id),{tipo:"partido", fecha:p.fecha, hora:p.hora, nota:(p.casa?"en casa contra ":"fuera contra ")+nombre, lugar:p.lugar, rival:"fbcv-"+p.rival,
         asistencia:{}, confirma:{}, notas:{}, notificada:true, creado:Date.now(), autor:S.user?.uid||""}); np++;
     }
+    // Nuestros dorsales (solo los vacíos)
+    Object.entries(data.propios||{}).forEach(([n,dor])=>{ const p=S.jug.find(x=>key(x.nombre)===key(n)); if(p && !hasDor(p)){ b.update(dref("jugadores",p.id),{dorsal:dor}); nd++; } });
     if(!nr && !nj && !np && !nd){ toast("Ya estaba todo importado"); return; }
     await run(()=>b.commit(), [np&&`${np} partidos`, nr&&`${nr} rivales`, nj&&`${nj} jugadores`, nd&&`${nd} dorsales`].filter(Boolean).join(", ")+" importados");
   }catch(e){ console.error(e); toast("No se pudo importar: "+errMsg(e)); }

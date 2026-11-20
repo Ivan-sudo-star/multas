@@ -797,5 +797,16 @@
    "lugar": "POLI MUNI ONTINYENT"
   }
  ],
- "dorsales": "Dorsales copiados de las actas de la FBCV (noviembre de 2026)"
+ "dorsales": "Dorsales copiados de las actas de la FBCV (noviembre de 2026)",
+ "propios": {
+  "IÑAKI VILLAR": "4",
+  "S. T.": "10",
+  "HUGO ABAD": "12",
+  "IKER GARCIA": "14",
+  "IVAN CAMBRA": "17",
+  "VICTOR CAMBRA": "39",
+  "XAVIER NOGUERA": "52",
+  "VICTOR FERNANDEZ": "86",
+  "BLAI REIG": "00"
+ }
 }

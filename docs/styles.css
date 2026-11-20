@@ -241,3 +241,4 @@ a.scoutlink{display:flex;flex-direction:column;gap:2px;text-decoration:none;colo
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .g-ic{filter:saturate(.9) brightness(.85)}}
 :root[data-theme="dark"] .g-ic{filter:saturate(.9) brightness(.85)}
 @media (prefers-reduced-motion:reduce){.g-ch{transition:none}}
+.av.num{font-size:17px;letter-spacing:-.02em}
