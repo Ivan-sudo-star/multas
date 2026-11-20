@@ -405,7 +405,7 @@ function renderAjustes(){
   $("#nFriWrap").hidden = !S.aj.viernes;
   { const pl=plazoCfg(); const t=typeById(pl.tipo);
     $("#plSummary").textContent = pl.activo
-      ? `Recordatorio ${pl.aviso} h antes del entreno (si es por la mañana, el día anterior a las 21:00). El plazo para contestar se cierra ${pl.cierre} h antes; quien no conteste recibe «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
+      ? `Recordatorio ${pl.aviso} h antes del entreno (si es por la mañana, el día anterior a las 17:00). El plazo para contestar se cierra ${pl.cierre} h antes; quien no conteste recibe «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
       : "Desactivado: no hay plazo ni multa por no contestar. Los recordatorios llegan 8 h antes.";
     $("#plEdit").hidden = !S.canWrite;
     if(S.canWrite && !document.activeElement?.closest("#plazoForm")){
