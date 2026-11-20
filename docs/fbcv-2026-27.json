@@ -6,218 +6,638 @@
    "nombre": "CB TORREVIEJA SENIOR MASC. A",
    "entrenador": "MARIO JOSE ESPINOSA",
    "jugadores": [
-    "ROBERT SKOROPAD",
-    "SAMUEL MOLINA",
-    "MIGUEL ARMENDARIZ",
-    "DANIEL ORVIZ",
-    "JAVIER CEFERINO CASTILLO",
-    "TOMÁS ISRAEL BLANCO",
-    "ALVARO GRAU",
-    "JAVIER ARMENDARIZ",
-    "A. M.",
-    "K. S."
+    {
+     "nombre": "ROBERT SKOROPAD",
+     "dorsal": "58"
+    },
+    {
+     "nombre": "SAMUEL MOLINA",
+     "dorsal": "45"
+    },
+    {
+     "nombre": "MIGUEL ARMENDARIZ",
+     "dorsal": "12"
+    },
+    {
+     "nombre": "DANIEL ORVIZ",
+     "dorsal": "91"
+    },
+    {
+     "nombre": "JAVIER CEFERINO CASTILLO",
+     "dorsal": "3"
+    },
+    {
+     "nombre": "TOMÁS ISRAEL BLANCO",
+     "dorsal": "7"
+    },
+    {
+     "nombre": "ALVARO GRAU",
+     "dorsal": "23"
+    },
+    {
+     "nombre": "JAVIER ARMENDARIZ",
+     "dorsal": "21"
+    },
+    {
+     "nombre": "A. M.",
+     "dorsal": "14"
+    },
+    {
+     "nombre": "K. S.",
+     "dorsal": "34"
+    }
    ]
   },
   "10729": {
    "nombre": "C.B. GENOVÉS GRUPO TORMO-GSPORT",
    "entrenador": "MIQUEL CAMARASA",
    "jugadores": [
-    "JORDI SOLER",
-    "JUAN JOSE BATALLER",
-    "MIQUEL CERDA",
-    "NACHO FERRÁNDIZ",
-    "PABLO SANCHIS",
-    "RUBEN BOU",
-    "SERGIO VIÑALS",
-    "ALEXANDRE SOLER",
-    "JOAN GINER",
-    "PABLO CERDA",
-    "DIEGO MARTINEZ",
-    "JOSEP UBEDA"
+    {
+     "nombre": "JORDI SOLER",
+     "dorsal": "8"
+    },
+    {
+     "nombre": "JUAN JOSE BATALLER",
+     "dorsal": "34"
+    },
+    {
+     "nombre": "MIQUEL CERDA",
+     "dorsal": "18"
+    },
+    {
+     "nombre": "NACHO FERRÁNDIZ",
+     "dorsal": "77"
+    },
+    {
+     "nombre": "PABLO SANCHIS",
+     "dorsal": "75"
+    },
+    {
+     "nombre": "RUBEN BOU",
+     "dorsal": null
+    },
+    {
+     "nombre": "SERGIO VIÑALS",
+     "dorsal": "70"
+    },
+    {
+     "nombre": "ALEXANDRE SOLER",
+     "dorsal": "4"
+    },
+    {
+     "nombre": "JOAN GINER",
+     "dorsal": "22"
+    },
+    {
+     "nombre": "PABLO CERDA",
+     "dorsal": "10"
+    },
+    {
+     "nombre": "DIEGO MARTINEZ",
+     "dorsal": "00"
+    },
+    {
+     "nombre": "JOSEP UBEDA",
+     "dorsal": "32"
+    }
    ]
   },
   "12927": {
    "nombre": "CB ASPE BLANCO",
    "entrenador": "MARIO JUAREZ",
    "jugadores": [
-    "KELVIN RIASCOS",
-    "A. P.",
-    "ALEJANDRO MORENO",
-    "IVAN MARCOS",
-    "PABLO ORTEGA",
-    "GIOVANNI CAMPOS",
-    "AITOR MARIN",
-    "B. H."
+    {
+     "nombre": "KELVIN RIASCOS",
+     "dorsal": "44"
+    },
+    {
+     "nombre": "A. P.",
+     "dorsal": "9"
+    },
+    {
+     "nombre": "ALEJANDRO MORENO",
+     "dorsal": "33"
+    },
+    {
+     "nombre": "IVAN MARCOS",
+     "dorsal": "22"
+    },
+    {
+     "nombre": "PABLO ORTEGA",
+     "dorsal": "7"
+    },
+    {
+     "nombre": "GIOVANNI CAMPOS",
+     "dorsal": "4"
+    },
+    {
+     "nombre": "AITOR MARIN",
+     "dorsal": "00"
+    },
+    {
+     "nombre": "B. H.",
+     "dorsal": null
+    }
    ]
   },
   "11600": {
    "nombre": "MEDMARKET BENIDORM",
    "entrenador": "DARIO CORNEJO",
    "jugadores": [
-    "MARIO JIMENA",
-    "IVAN MARCET",
-    "ALEX ROLDAN",
-    "JORDAN GARCIA",
-    "JORGE FERRANDO",
-    "J. F.",
-    "JORGE SANCHEZ",
-    "M. D.",
-    "RONALDO ANDRES LEON",
-    "DABERECHUKWU PEDRO OFORAOH",
-    "PEDRO VERA"
+    {
+     "nombre": "MARIO JIMENA",
+     "dorsal": "4"
+    },
+    {
+     "nombre": "IVAN MARCET",
+     "dorsal": null
+    },
+    {
+     "nombre": "ALEX ROLDAN",
+     "dorsal": "24"
+    },
+    {
+     "nombre": "JORDAN GARCIA",
+     "dorsal": "1"
+    },
+    {
+     "nombre": "JORGE FERRANDO",
+     "dorsal": "8"
+    },
+    {
+     "nombre": "J. F.",
+     "dorsal": null
+    },
+    {
+     "nombre": "JORGE SANCHEZ",
+     "dorsal": "35"
+    },
+    {
+     "nombre": "M. D.",
+     "dorsal": null
+    },
+    {
+     "nombre": "RONALDO ANDRES LEON",
+     "dorsal": "50"
+    },
+    {
+     "nombre": "DABERECHUKWU PEDRO OFORAOH",
+     "dorsal": "17"
+    },
+    {
+     "nombre": "PEDRO VERA",
+     "dorsal": "23"
+    }
    ]
   },
   "10840": {
    "nombre": "C.B. JORGE JUAN B CASTELLÓ SINCE 1907",
    "entrenador": "A. B.",
    "jugadores": [
-    "A. B.",
-    "ALVARO CREMADES",
-    "FRANCISCO SELLER",
-    "EDGAR ADOLFO MORALES",
-    "DAVID MARTINEZ",
-    "RAUL CREMADES",
-    "JORGE BERMUDEZ",
-    "DAVID ALBEROLA",
-    "OSCAR MARTINEZ",
-    "MATVII SUKHORUCHKIN",
-    "MARCOS COLOMA",
-    "MIGUEL ANTONIO LOPEZ"
+    {
+     "nombre": "A. B.",
+     "dorsal": null
+    },
+    {
+     "nombre": "ALVARO CREMADES",
+     "dorsal": "29"
+    },
+    {
+     "nombre": "FRANCISCO SELLER",
+     "dorsal": "77"
+    },
+    {
+     "nombre": "EDGAR ADOLFO MORALES",
+     "dorsal": "9"
+    },
+    {
+     "nombre": "DAVID MARTINEZ",
+     "dorsal": "3"
+    },
+    {
+     "nombre": "RAUL CREMADES",
+     "dorsal": "27"
+    },
+    {
+     "nombre": "JORGE BERMUDEZ",
+     "dorsal": null
+    },
+    {
+     "nombre": "DAVID ALBEROLA",
+     "dorsal": "88"
+    },
+    {
+     "nombre": "OSCAR MARTINEZ",
+     "dorsal": "4"
+    },
+    {
+     "nombre": "MATVII SUKHORUCHKIN",
+     "dorsal": "1"
+    },
+    {
+     "nombre": "MARCOS COLOMA",
+     "dorsal": null
+    },
+    {
+     "nombre": "MIGUEL ANTONIO LOPEZ",
+     "dorsal": "73"
+    }
    ]
   },
   "11826": {
    "nombre": "C.B. MUTXAMEL",
    "entrenador": "ALEJANDRO CASANOVA",
    "jugadores": [
-    "OLIVER SANCHEZ",
-    "JOAN PASCUAL",
-    "FERNANDO RODRIGUEZ",
-    "MANUEL LOPEZ",
-    "VICTOR HERNANDEZ",
-    "RODRIGO SAN",
-    "CARLOS EMILIO HERNANDEZ",
-    "JOAN ALBERT FERNANDEZ",
-    "ADRIAN LARROSA",
-    "OSCAR BENEITO",
-    "ERNESTO CARO",
-    "BRUNO PIÑEIRO"
+    {
+     "nombre": "OLIVER SANCHEZ",
+     "dorsal": null
+    },
+    {
+     "nombre": "JOAN PASCUAL",
+     "dorsal": "27"
+    },
+    {
+     "nombre": "FERNANDO RODRIGUEZ",
+     "dorsal": "14"
+    },
+    {
+     "nombre": "MANUEL LOPEZ",
+     "dorsal": "5"
+    },
+    {
+     "nombre": "VICTOR HERNANDEZ",
+     "dorsal": "10"
+    },
+    {
+     "nombre": "RODRIGO SAN",
+     "dorsal": "77"
+    },
+    {
+     "nombre": "CARLOS EMILIO HERNANDEZ",
+     "dorsal": "12"
+    },
+    {
+     "nombre": "JOAN ALBERT FERNANDEZ",
+     "dorsal": "2"
+    },
+    {
+     "nombre": "ADRIAN LARROSA",
+     "dorsal": "11"
+    },
+    {
+     "nombre": "OSCAR BENEITO",
+     "dorsal": "4"
+    },
+    {
+     "nombre": "ERNESTO CARO",
+     "dorsal": null
+    },
+    {
+     "nombre": "BRUNO PIÑEIRO",
+     "dorsal": null
+    }
    ]
   },
   "12935": {
    "nombre": "ELX BASKET ACADEMY U22",
    "entrenador": "CARLOS POVEDA",
    "jugadores": [
-    "CARLOS POVEDA",
-    "RODRIGO ROCAMORA",
-    "GUIM VIDAL",
-    "KALE MIŠIČ",
-    "S. B.",
-    "C. B.",
-    "MATEO TEMERU FALCÓN",
-    "BRYAN GEORGE CALAME-ROSSET",
-    "L. P.",
-    "CHRISTOPHER OLIVER BARELLI"
+    {
+     "nombre": "CARLOS POVEDA",
+     "dorsal": null
+    },
+    {
+     "nombre": "RODRIGO ROCAMORA",
+     "dorsal": null
+    },
+    {
+     "nombre": "GUIM VIDAL",
+     "dorsal": null
+    },
+    {
+     "nombre": "KALE MIŠIČ",
+     "dorsal": null
+    },
+    {
+     "nombre": "S. B.",
+     "dorsal": null
+    },
+    {
+     "nombre": "C. B.",
+     "dorsal": "0"
+    },
+    {
+     "nombre": "MATEO TEMERU FALCÓN",
+     "dorsal": "1"
+    },
+    {
+     "nombre": "BRYAN GEORGE CALAME-ROSSET",
+     "dorsal": "10"
+    },
+    {
+     "nombre": "L. P.",
+     "dorsal": null
+    },
+    {
+     "nombre": "CHRISTOPHER OLIVER BARELLI",
+     "dorsal": null
+    }
    ]
   },
   "10584": {
    "nombre": "TSA CONSTRUCCION - CB TEIXERETA A",
    "entrenador": "DAVID MARTOS",
    "jugadores": [
-    "SALVADOR VALLS",
-    "JORDI CHORRO",
-    "JORDI CANTO",
-    "MARC PALAO",
-    "CHUS MARTÍNEZ",
-    "S. M.",
-    "JORDI VICENT",
-    "JORGE MOLLA",
-    "FARES EL",
-    "BENITO BLAS GOMEZ"
+    {
+     "nombre": "SALVADOR VALLS",
+     "dorsal": "14"
+    },
+    {
+     "nombre": "JORDI CHORRO",
+     "dorsal": "32"
+    },
+    {
+     "nombre": "JORDI CANTO",
+     "dorsal": "3"
+    },
+    {
+     "nombre": "MARC PALAO",
+     "dorsal": "19"
+    },
+    {
+     "nombre": "CHUS MARTÍNEZ",
+     "dorsal": "30"
+    },
+    {
+     "nombre": "S. M.",
+     "dorsal": "10"
+    },
+    {
+     "nombre": "JORDI VICENT",
+     "dorsal": "4"
+    },
+    {
+     "nombre": "JORGE MOLLA",
+     "dorsal": "15"
+    },
+    {
+     "nombre": "FARES EL",
+     "dorsal": "93"
+    },
+    {
+     "nombre": "BENITO BLAS GOMEZ",
+     "dorsal": "17"
+    }
    ]
   },
   "12881": {
    "nombre": "HOTELES RH - C.B. LA VILA",
    "entrenador": "FRANCESC SOLBES",
    "jugadores": [
-    "JORDI COMPANY",
-    "JOAN BAUTISTA MORALES",
-    "JAIME MORALES",
-    "JOSE LUIS SEMPERE",
-    "EDE NICHOLAS NISZTOR",
-    "DELIO RICARDO DELVA",
-    "PAU COMPANY",
-    "RAUL MASIP",
-    "ALVARO LLINARES",
-    "JOSE SANTAMARIA",
-    "JUAN JOSE PASTOR"
+    {
+     "nombre": "JORDI COMPANY",
+     "dorsal": "25"
+    },
+    {
+     "nombre": "JOAN BAUTISTA MORALES",
+     "dorsal": "14"
+    },
+    {
+     "nombre": "JAIME MORALES",
+     "dorsal": "6"
+    },
+    {
+     "nombre": "JOSE LUIS SEMPERE",
+     "dorsal": "4"
+    },
+    {
+     "nombre": "EDE NICHOLAS NISZTOR",
+     "dorsal": null
+    },
+    {
+     "nombre": "DELIO RICARDO DELVA",
+     "dorsal": "7"
+    },
+    {
+     "nombre": "PAU COMPANY",
+     "dorsal": "30"
+    },
+    {
+     "nombre": "RAUL MASIP",
+     "dorsal": "11"
+    },
+    {
+     "nombre": "ALVARO LLINARES",
+     "dorsal": "15"
+    },
+    {
+     "nombre": "JOSE SANTAMARIA",
+     "dorsal": "77"
+    },
+    {
+     "nombre": "JUAN JOSE PASTOR",
+     "dorsal": null
+    }
    ]
   },
   "12874": {
    "nombre": "ASTEL LOGISTIC BSG",
    "entrenador": "JOSE ANDRES GUIRAO",
    "jugadores": [
-    "ANIBAL SERRANO",
-    "ERIC ESCOLANO",
-    "ANUAR DORGHAM",
-    "CARLOS GILABERT",
-    "RAUL ISLA",
-    "JOSE ANGEL HERMOSO",
-    "MARIO PICO",
-    "JONATHAN MARCELO GARCIA",
-    "TOMAS AGUSTIN BARDINI",
-    "TATEPO KEMBO NINO"
+    {
+     "nombre": "ANIBAL SERRANO",
+     "dorsal": "17"
+    },
+    {
+     "nombre": "ERIC ESCOLANO",
+     "dorsal": "21"
+    },
+    {
+     "nombre": "ANUAR DORGHAM",
+     "dorsal": "73"
+    },
+    {
+     "nombre": "CARLOS GILABERT",
+     "dorsal": "5"
+    },
+    {
+     "nombre": "RAUL ISLA",
+     "dorsal": "3"
+    },
+    {
+     "nombre": "JOSE ANGEL HERMOSO",
+     "dorsal": "99"
+    },
+    {
+     "nombre": "MARIO PICO",
+     "dorsal": null
+    },
+    {
+     "nombre": "JONATHAN MARCELO GARCIA",
+     "dorsal": "11"
+    },
+    {
+     "nombre": "TOMAS AGUSTIN BARDINI",
+     "dorsal": "23"
+    },
+    {
+     "nombre": "TATEPO KEMBO NINO",
+     "dorsal": "15"
+    }
    ]
   },
   "10444": {
    "nombre": "CB ROLSER PEDREGUER",
    "entrenador": "BERNARDO SANZ",
    "jugadores": [
-    "RIZKY DARMAWAN",
-    "CARLOS FORNES",
-    "BERNAT SANZ",
-    "EDUARDO VICENS",
-    "JORDI RUIZ",
-    "JAVIER SERRANO",
-    "CARLOS RODRIGUEZ",
-    "PAU APARISI",
-    "ISMAEL AKHACHI",
-    "LUCAS MATIAS GRENON"
+    {
+     "nombre": "RIZKY DARMAWAN",
+     "dorsal": "13"
+    },
+    {
+     "nombre": "CARLOS FORNES",
+     "dorsal": null
+    },
+    {
+     "nombre": "BERNAT SANZ",
+     "dorsal": "3"
+    },
+    {
+     "nombre": "EDUARDO VICENS",
+     "dorsal": "7"
+    },
+    {
+     "nombre": "JORDI RUIZ",
+     "dorsal": "99"
+    },
+    {
+     "nombre": "JAVIER SERRANO",
+     "dorsal": null
+    },
+    {
+     "nombre": "CARLOS RODRIGUEZ",
+     "dorsal": "2"
+    },
+    {
+     "nombre": "PAU APARISI",
+     "dorsal": null
+    },
+    {
+     "nombre": "ISMAEL AKHACHI",
+     "dorsal": "0"
+    },
+    {
+     "nombre": "LUCAS MATIAS GRENON",
+     "dorsal": "22"
+    }
    ]
   },
   "10811": {
    "nombre": "CB OLIVA MOMPÓ-ÓPTICA",
    "entrenador": "O. R.",
    "jugadores": [
-    "ALEX SAVALL",
-    "NICOLAU PALLARES",
-    "MARC PICORNELL",
-    "CARLES MORATALLA",
-    "XAVI MARRADES",
-    "SERGI TORTOSA",
-    "JOAN VICENT FONTANA",
-    "ALEXANDRE TARRASO",
-    "GUILLEM MARTINEZ",
-    "JORGE MIRET",
-    "ALEIXANDRE GARCIA",
-    "ANDREU LLORCA"
+    {
+     "nombre": "ALEX SAVALL",
+     "dorsal": "14"
+    },
+    {
+     "nombre": "NICOLAU PALLARES",
+     "dorsal": null
+    },
+    {
+     "nombre": "MARC PICORNELL",
+     "dorsal": "10"
+    },
+    {
+     "nombre": "CARLES MORATALLA",
+     "dorsal": "23"
+    },
+    {
+     "nombre": "XAVI MARRADES",
+     "dorsal": "17"
+    },
+    {
+     "nombre": "SERGI TORTOSA",
+     "dorsal": "7"
+    },
+    {
+     "nombre": "JOAN VICENT FONTANA",
+     "dorsal": "5"
+    },
+    {
+     "nombre": "ALEXANDRE TARRASO",
+     "dorsal": "12"
+    },
+    {
+     "nombre": "GUILLEM MARTINEZ",
+     "dorsal": "3"
+    },
+    {
+     "nombre": "JORGE MIRET",
+     "dorsal": "34"
+    },
+    {
+     "nombre": "ALEIXANDRE GARCIA",
+     "dorsal": null
+    },
+    {
+     "nombre": "ANDREU LLORCA",
+     "dorsal": null
+    }
    ]
   },
   "11845": {
    "nombre": "MONTEMAR-TECNOCASA",
    "entrenador": "ALBERTO CARLOS PERTEGAS",
    "jugadores": [
-    "LUCAS BERENGUER",
-    "CARLOS SOLER",
-    "IAN SANCHEZ",
-    "ISMAEL MAAMRIA",
-    "JAVIER CASERO",
-    "ALEJANDRO GARCIA",
-    "AGUSTIN LURASCHI",
-    "CARLOS CRESPO",
-    "IVAN MOYA",
-    "GONZALO RUIZ",
-    "RAMÓN BLANCO",
-    "MATÍAS JIMÉNEZ"
+    {
+     "nombre": "LUCAS BERENGUER",
+     "dorsal": "15"
+    },
+    {
+     "nombre": "CARLOS SOLER",
+     "dorsal": "14"
+    },
+    {
+     "nombre": "IAN SANCHEZ",
+     "dorsal": "7"
+    },
+    {
+     "nombre": "ISMAEL MAAMRIA",
+     "dorsal": null
+    },
+    {
+     "nombre": "JAVIER CASERO",
+     "dorsal": "11"
+    },
+    {
+     "nombre": "ALEJANDRO GARCIA",
+     "dorsal": "6"
+    },
+    {
+     "nombre": "AGUSTIN LURASCHI",
+     "dorsal": "10"
+    },
+    {
+     "nombre": "CARLOS CRESPO",
+     "dorsal": null
+    },
+    {
+     "nombre": "IVAN MOYA",
+     "dorsal": null
+    },
+    {
+     "nombre": "GONZALO RUIZ",
+     "dorsal": "8"
+    },
+    {
+     "nombre": "RAMÓN BLANCO",
+     "dorsal": "16"
+    },
+    {
+     "nombre": "MATÍAS JIMÉNEZ",
+     "dorsal": "5"
+    }
    ]
   }
  },
@@ -376,5 +796,6 @@
    "rival": "10729",
    "lugar": "POLI MUNI ONTINYENT"
   }
- ]
+ ],
+ "dorsales": "Dorsales copiados de las actas de la FBCV (noviembre de 2026)"
 }

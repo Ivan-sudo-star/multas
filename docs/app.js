@@ -987,7 +987,8 @@ function renderScouting(){
   }
   const r=rs.find(x=>x.id===S.rivalOpen);
   if(!r){ box.innerHTML = rs.length ? '<p class="note">Elige un rival para ver su plantilla y las notas.</p>' : '<div class="empty"><b>Sin rivales</b>'+(S.canWrite?"Añade el primero arriba.":"Cuando un administrador añada rivales, aparecerán aquí.")+'</div>'; return; }
-  const plantilla=Object.entries(r.plantilla||{}).map(([id,j])=>({id,...j})).sort((a,b)=>(+a.dorsal||999)-(+b.dorsal||999)||(a.nombre||"").localeCompare(b.nombre||""));
+  const dn=j=>(j.dorsal===null||j.dorsal===undefined||j.dorsal==="")?999:+j.dorsal;
+  const plantilla=Object.entries(r.plantilla||{}).map(([id,j])=>({id,...j})).sort((a,b)=>dn(a)-dn(b)||(a.nombre||"").localeCompare(b.nombre||""));
   const notasDe=pid=>S.rivNotas.filter(n=>(n.jugador||"")===pid).sort((a,b)=>(a.creado||0)-(b.creado||0));
   const partidos=S.eventos.filter(ev=>ev.rival===r.id).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
   const notaHtml=n=>`<div class="nota"><p>${esc(n.texto)}<br><span class="mini">${esc(shortName(n.nombre))} · ${esc(haceCuanto(n.creado||0))}</span></p>${S.canWrite||n.autor===email()?`<button type="button" class="btn small ghost" data-notadel="${esc(n.id)}">✕</button>`:""}</div>`;
@@ -1043,14 +1044,20 @@ async function importFBCV(){
   const btn=$("#fbcvBtn"); btn.disabled=true; btn.textContent="Importando…";
   try{
     const data=await (await fetch("fbcv-2026-27.json",{cache:"no-cache"})).json();
-    const b=F.writeBatch(db); let nr=0, nj=0, np=0;
+    const b=F.writeBatch(db); let nr=0, nj=0, np=0, nd=0;
+    const key=n=>String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[.\s]+/g," ").trim();
     for(const [fid,r] of Object.entries(data.rivales)){
       const id="fbcv-"+fid, ex=S.rivales.find(x=>x.id===id);
-      const ya=new Set(Object.values(ex?.plantilla||{}).map(j=>String(j.nombre).toUpperCase()));
-      const nuevos=r.jugadores.filter(n=>!ya.has(n.toUpperCase()));
+      const jug=r.jugadores.map(j=>typeof j==="string"?{nombre:j,dorsal:null}:j);
+      const ya=new Map(Object.entries(ex?.plantilla||{}).map(([pid,j])=>[key(j.nombre),{pid,...j}]));
+      const nuevos=jug.filter(j=>!ya.has(key(j.nombre)));
       if(!ex){ b.set(F.doc(col("rivales"),id),{nombre:r.nombre, entrenador:r.entrenador||"", fbcv:fid, creado:Date.now(),
-          plantilla:Object.fromEntries(nuevos.map(n=>[uid6(),{nombre:n, dorsal:null, pos:""}]))}); nr++; nj+=nuevos.length; }
-      else if(nuevos.length){ nuevos.forEach(n=>b.update(F.doc(col("rivales"),id), new F.FieldPath("plantilla",uid6()), {nombre:n, dorsal:null, pos:""})); nj+=nuevos.length; }
+          plantilla:Object.fromEntries(nuevos.map(j=>[uid6(),{nombre:j.nombre, dorsal:j.dorsal??null, pos:""}]))}); nr++; nj+=nuevos.length; continue; }
+      const args=[];
+      nuevos.forEach(j=>{ args.push(new F.FieldPath("plantilla",uid6()), {nombre:j.nombre, dorsal:j.dorsal??null, pos:""}); nj++; });
+      // Dorsales: solo se rellenan los que estén vacíos, para no pisar los que hayáis puesto a mano
+      jug.forEach(j=>{ const e=ya.get(key(j.nombre)); if(e && j.dorsal!=null && (e.dorsal===null||e.dorsal===undefined||e.dorsal==="")){ args.push(new F.FieldPath("plantilla",e.pid,"dorsal"), j.dorsal); nd++; } });
+      if(args.length) b.update(F.doc(col("rivales"),id), ...args);
     }
     for(const p of data.partidos){
       if(p.fecha<today()) continue;
@@ -1060,8 +1067,8 @@ async function importFBCV(){
       b.set(F.doc(col("eventos"),id),{tipo:"partido", fecha:p.fecha, hora:p.hora, nota:(p.casa?"en casa contra ":"fuera contra ")+nombre, lugar:p.lugar, rival:"fbcv-"+p.rival,
         asistencia:{}, confirma:{}, notas:{}, notificada:true, creado:Date.now(), autor:S.user?.uid||""}); np++;
     }
-    if(!nr && !nj && !np){ toast("Ya estaba todo importado"); return; }
-    await run(()=>b.commit(), `Importados: ${np} partidos, ${nr} rivales y ${nj} jugadores`);
+    if(!nr && !nj && !np && !nd){ toast("Ya estaba todo importado"); return; }
+    await run(()=>b.commit(), [np&&`${np} partidos`, nr&&`${nr} rivales`, nj&&`${nj} jugadores`, nd&&`${nd} dorsales`].filter(Boolean).join(", ")+" importados");
   }catch(e){ console.error(e); toast("No se pudo importar: "+errMsg(e)); }
   finally{ btn.disabled=false; btn.textContent="📥 Importar calendario y plantillas de la FBCV"; }
 }
