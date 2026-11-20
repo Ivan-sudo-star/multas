@@ -169,6 +169,11 @@
 <section id="v-scouting" class="view" hidden><div class="wrap">
   <div><a href="#asistencia" class="note">← Asistencia</a><h2>Scouting</h2><p class="sub">Plantillas de los rivales e información de cada jugador. La ve todo el equipo.</p></div>
   <div class="row"><label class="f">Rival<select id="rivSel"></select></label></div>
+  <div class="card" id="fbcvCard" hidden>
+    <h3>FBCV</h3>
+    <p class="note">Crea los partidos que quedan de la liga (con hora y pabellón) y los 13 rivales con su plantilla. Si ya existen, no se duplican.</p>
+    <button type="button" class="btn" id="fbcvBtn">📥 Importar calendario y plantillas de la FBCV</button>
+  </div>
   <form id="rivNew" class="card" novalidate hidden>
     <h3>Nuevo rival</h3>
     <div class="row"><label class="f">Nombre del equipo<input type="text" id="rivNombre" maxlength="60" placeholder="Ej.: CB Alzira"></label><button type="submit" class="btn">Añadir</button></div>

@@ -1,0 +1,380 @@
+{
+ "fuente": "FBCV · Senior Masculino Autonómico · Fase regular, grupo C · equipo 11184",
+ "copiado": "2026-11-20",
+ "rivales": {
+  "11937": {
+   "nombre": "CB TORREVIEJA SENIOR MASC. A",
+   "entrenador": "MARIO JOSE ESPINOSA",
+   "jugadores": [
+    "ROBERT SKOROPAD",
+    "SAMUEL MOLINA",
+    "MIGUEL ARMENDARIZ",
+    "DANIEL ORVIZ",
+    "JAVIER CEFERINO CASTILLO",
+    "TOMÁS ISRAEL BLANCO",
+    "ALVARO GRAU",
+    "JAVIER ARMENDARIZ",
+    "A. M.",
+    "K. S."
+   ]
+  },
+  "10729": {
+   "nombre": "C.B. GENOVÉS GRUPO TORMO-GSPORT",
+   "entrenador": "MIQUEL CAMARASA",
+   "jugadores": [
+    "JORDI SOLER",
+    "JUAN JOSE BATALLER",
+    "MIQUEL CERDA",
+    "NACHO FERRÁNDIZ",
+    "PABLO SANCHIS",
+    "RUBEN BOU",
+    "SERGIO VIÑALS",
+    "ALEXANDRE SOLER",
+    "JOAN GINER",
+    "PABLO CERDA",
+    "DIEGO MARTINEZ",
+    "JOSEP UBEDA"
+   ]
+  },
+  "12927": {
+   "nombre": "CB ASPE BLANCO",
+   "entrenador": "MARIO JUAREZ",
+   "jugadores": [
+    "KELVIN RIASCOS",
+    "A. P.",
+    "ALEJANDRO MORENO",
+    "IVAN MARCOS",
+    "PABLO ORTEGA",
+    "GIOVANNI CAMPOS",
+    "AITOR MARIN",
+    "B. H."
+   ]
+  },
+  "11600": {
+   "nombre": "MEDMARKET BENIDORM",
+   "entrenador": "DARIO CORNEJO",
+   "jugadores": [
+    "MARIO JIMENA",
+    "IVAN MARCET",
+    "ALEX ROLDAN",
+    "JORDAN GARCIA",
+    "JORGE FERRANDO",
+    "J. F.",
+    "JORGE SANCHEZ",
+    "M. D.",
+    "RONALDO ANDRES LEON",
+    "DABERECHUKWU PEDRO OFORAOH",
+    "PEDRO VERA"
+   ]
+  },
+  "10840": {
+   "nombre": "C.B. JORGE JUAN B CASTELLÓ SINCE 1907",
+   "entrenador": "A. B.",
+   "jugadores": [
+    "A. B.",
+    "ALVARO CREMADES",
+    "FRANCISCO SELLER",
+    "EDGAR ADOLFO MORALES",
+    "DAVID MARTINEZ",
+    "RAUL CREMADES",
+    "JORGE BERMUDEZ",
+    "DAVID ALBEROLA",
+    "OSCAR MARTINEZ",
+    "MATVII SUKHORUCHKIN",
+    "MARCOS COLOMA",
+    "MIGUEL ANTONIO LOPEZ"
+   ]
+  },
+  "11826": {
+   "nombre": "C.B. MUTXAMEL",
+   "entrenador": "ALEJANDRO CASANOVA",
+   "jugadores": [
+    "OLIVER SANCHEZ",
+    "JOAN PASCUAL",
+    "FERNANDO RODRIGUEZ",
+    "MANUEL LOPEZ",
+    "VICTOR HERNANDEZ",
+    "RODRIGO SAN",
+    "CARLOS EMILIO HERNANDEZ",
+    "JOAN ALBERT FERNANDEZ",
+    "ADRIAN LARROSA",
+    "OSCAR BENEITO",
+    "ERNESTO CARO",
+    "BRUNO PIÑEIRO"
+   ]
+  },
+  "12935": {
+   "nombre": "ELX BASKET ACADEMY U22",
+   "entrenador": "CARLOS POVEDA",
+   "jugadores": [
+    "CARLOS POVEDA",
+    "RODRIGO ROCAMORA",
+    "GUIM VIDAL",
+    "KALE MIŠIČ",
+    "S. B.",
+    "C. B.",
+    "MATEO TEMERU FALCÓN",
+    "BRYAN GEORGE CALAME-ROSSET",
+    "L. P.",
+    "CHRISTOPHER OLIVER BARELLI"
+   ]
+  },
+  "10584": {
+   "nombre": "TSA CONSTRUCCION - CB TEIXERETA A",
+   "entrenador": "DAVID MARTOS",
+   "jugadores": [
+    "SALVADOR VALLS",
+    "JORDI CHORRO",
+    "JORDI CANTO",
+    "MARC PALAO",
+    "CHUS MARTÍNEZ",
+    "S. M.",
+    "JORDI VICENT",
+    "JORGE MOLLA",
+    "FARES EL",
+    "BENITO BLAS GOMEZ"
+   ]
+  },
+  "12881": {
+   "nombre": "HOTELES RH - C.B. LA VILA",
+   "entrenador": "FRANCESC SOLBES",
+   "jugadores": [
+    "JORDI COMPANY",
+    "JOAN BAUTISTA MORALES",
+    "JAIME MORALES",
+    "JOSE LUIS SEMPERE",
+    "EDE NICHOLAS NISZTOR",
+    "DELIO RICARDO DELVA",
+    "PAU COMPANY",
+    "RAUL MASIP",
+    "ALVARO LLINARES",
+    "JOSE SANTAMARIA",
+    "JUAN JOSE PASTOR"
+   ]
+  },
+  "12874": {
+   "nombre": "ASTEL LOGISTIC BSG",
+   "entrenador": "JOSE ANDRES GUIRAO",
+   "jugadores": [
+    "ANIBAL SERRANO",
+    "ERIC ESCOLANO",
+    "ANUAR DORGHAM",
+    "CARLOS GILABERT",
+    "RAUL ISLA",
+    "JOSE ANGEL HERMOSO",
+    "MARIO PICO",
+    "JONATHAN MARCELO GARCIA",
+    "TOMAS AGUSTIN BARDINI",
+    "TATEPO KEMBO NINO"
+   ]
+  },
+  "10444": {
+   "nombre": "CB ROLSER PEDREGUER",
+   "entrenador": "BERNARDO SANZ",
+   "jugadores": [
+    "RIZKY DARMAWAN",
+    "CARLOS FORNES",
+    "BERNAT SANZ",
+    "EDUARDO VICENS",
+    "JORDI RUIZ",
+    "JAVIER SERRANO",
+    "CARLOS RODRIGUEZ",
+    "PAU APARISI",
+    "ISMAEL AKHACHI",
+    "LUCAS MATIAS GRENON"
+   ]
+  },
+  "10811": {
+   "nombre": "CB OLIVA MOMPÓ-ÓPTICA",
+   "entrenador": "O. R.",
+   "jugadores": [
+    "ALEX SAVALL",
+    "NICOLAU PALLARES",
+    "MARC PICORNELL",
+    "CARLES MORATALLA",
+    "XAVI MARRADES",
+    "SERGI TORTOSA",
+    "JOAN VICENT FONTANA",
+    "ALEXANDRE TARRASO",
+    "GUILLEM MARTINEZ",
+    "JORGE MIRET",
+    "ALEIXANDRE GARCIA",
+    "ANDREU LLORCA"
+   ]
+  },
+  "11845": {
+   "nombre": "MONTEMAR-TECNOCASA",
+   "entrenador": "ALBERTO CARLOS PERTEGAS",
+   "jugadores": [
+    "LUCAS BERENGUER",
+    "CARLOS SOLER",
+    "IAN SANCHEZ",
+    "ISMAEL MAAMRIA",
+    "JAVIER CASERO",
+    "ALEJANDRO GARCIA",
+    "AGUSTIN LURASCHI",
+    "CARLOS CRESPO",
+    "IVAN MOYA",
+    "GONZALO RUIZ",
+    "RAMÓN BLANCO",
+    "MATÍAS JIMÉNEZ"
+   ]
+  }
+ },
+ "partidos": [
+  {
+   "fecha": "2026-11-14",
+   "hora": "18:00",
+   "casa": false,
+   "rival": "11845",
+   "lugar": "CLUB ATLETICO MONTEMAR"
+  },
+  {
+   "fecha": "2026-11-22",
+   "hora": "12:00",
+   "casa": true,
+   "rival": "11600",
+   "lugar": "PAB FERNANDO RUBIO"
+  },
+  {
+   "fecha": "2026-11-28",
+   "hora": "18:30",
+   "casa": false,
+   "rival": "12881",
+   "lugar": "PAB MUNI MAISA LLORET"
+  },
+  {
+   "fecha": "2026-12-04",
+   "hora": "20:45",
+   "casa": true,
+   "rival": "11937",
+   "lugar": "PAB FERNANDO RUBIO"
+  },
+  {
+   "fecha": "2026-12-05",
+   "hora": "20:00",
+   "casa": false,
+   "rival": "10584",
+   "lugar": "POLI MUNI IBI"
+  },
+  {
+   "fecha": "2026-12-13",
+   "hora": "12:00",
+   "casa": true,
+   "rival": "10811",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2026-12-20",
+   "hora": "19:00",
+   "casa": false,
+   "rival": "10840",
+   "lugar": "PAB MUNI LA MAGDALENA"
+  },
+  {
+   "fecha": "2027-01-10",
+   "hora": "12:00",
+   "casa": true,
+   "rival": "12935",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2027-01-16",
+   "hora": "17:45",
+   "casa": false,
+   "rival": "10729",
+   "lugar": "POLIESPORTIU PACO CABANES EL GENOVÉS"
+  },
+  {
+   "fecha": "2027-01-23",
+   "hora": "20:00",
+   "casa": false,
+   "rival": "12927",
+   "lugar": "PAB MUNI ASPE"
+  },
+  {
+   "fecha": "2027-01-31",
+   "hora": "12:00",
+   "casa": true,
+   "rival": "11826",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2027-02-07",
+   "hora": "09:00",
+   "casa": false,
+   "rival": "12874",
+   "lugar": "PAB MUNI FLORIDA BABEL"
+  },
+  {
+   "fecha": "2027-02-14",
+   "hora": "12:00",
+   "casa": true,
+   "rival": "10444",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2027-02-21",
+   "hora": "12:00",
+   "casa": false,
+   "rival": "11937",
+   "lugar": "PAB MUNI LA MATA"
+  },
+  {
+   "fecha": "2027-02-27",
+   "hora": "18:30",
+   "casa": true,
+   "rival": "11845",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2027-03-07",
+   "hora": "19:00",
+   "casa": false,
+   "rival": "11600",
+   "lugar": "PALAU ESPORT BENIDORM"
+  },
+  {
+   "fecha": "2027-03-13",
+   "hora": "18:30",
+   "casa": true,
+   "rival": "12881",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2027-03-20",
+   "hora": "18:30",
+   "casa": true,
+   "rival": "10584",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2027-04-03",
+   "hora": "18:15",
+   "casa": false,
+   "rival": "10811",
+   "lugar": "POLI MUNI OLIVA"
+  },
+  {
+   "fecha": "2027-04-10",
+   "hora": "18:30",
+   "casa": true,
+   "rival": "10840",
+   "lugar": "POLI MUNI ONTINYENT"
+  },
+  {
+   "fecha": "2027-04-17",
+   "hora": "16:30",
+   "casa": false,
+   "rival": "12935",
+   "lugar": "PABELLON SARA MARIN Y MARIA DIEZ"
+  },
+  {
+   "fecha": "2027-04-24",
+   "hora": "18:30",
+   "casa": true,
+   "rival": "10729",
+   "lugar": "POLI MUNI ONTINYENT"
+  }
+ ]
+}

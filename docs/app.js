@@ -287,7 +287,7 @@ function evCard(ev, upcoming){
   const myV = me ? confirmOf(ev,me) : undefined;
   let html=`<li class="ev ${ev.tipo==="partido"?"partido":""} ${ev.fecha===today()?"today":""}">
     <div class="evhead"><span class="evdate"><b>${d.getDate()}</b><span>${MESES[d.getMonth()].slice(0,3)}</span></span>
-      <span class="who"><b>${esc(evTitle(ev))}</b><span>${esc(d.toLocaleDateString("es-ES",{weekday:"long"}))}${ev.hora?" · "+esc(ev.hora):""}${ev.fecha===today()?" · hoy":""}</span></span>
+      <span class="who"><b>${esc(evTitle(ev))}</b><span>${esc(d.toLocaleDateString("es-ES",{weekday:"long"}))}${ev.hora?" · "+esc(ev.hora):""}${ev.fecha===today()?" · hoy":""}${ev.lugar?"<br>📍 "+esc(ev.lugar):""}</span></span>
       <span class="evcount">${count}</span></div>`;
   if(upcoming && ev.cierre) html+= isClosed(ev)
       ? `<span class="pill old" style="align-self:flex-start">Plazo cerrado${ev.plazoCerrado?" · ya se multó a quien no contestó":""}</span>`
@@ -560,7 +560,10 @@ document.addEventListener("click", e=>{
   if(d.rsvp){ const [id,v]=d.rsvp.split("|"); const ev=evById(id); const me=myPlayer(); if(!ev||!me) return;
       if(isClosed(ev)){ toast("El plazo para contestar ya se ha cerrado"); return; }
       const cur=confirmOf(ev,me); const nv = cur===v ? "" : v;
-      run(()=>F.updateDoc(dref("eventos",id), new F.FieldPath("confirma",email()), nv), nv==="si"?"Apuntado: vas":nv==="no"?"Apuntado: no vas":"Respuesta quitada"); return; }
+      // Si era el «No voy» automático del día fijo y cambia de idea, se quita también el motivo (solo en este entreno)
+      const nt=noteOf(ev,me); const fijo = nt && (nt===me.diasNota || nt==="Día fijo");
+      const extra = (nv!=="no" && fijo) ? [new F.FieldPath("notas",email()), ""] : [];
+      run(()=>F.updateDoc(dref("eventos",id), new F.FieldPath("confirma",email()), nv, ...extra), nv==="si"?(fijo?"Cambiado solo para este día: vas":"Apuntado: vas"):nv==="no"?"Apuntado: no vas":"Respuesta quitada"); return; }
   if(d.rsvpnote){ const id=d.rsvpnote; if(isClosed(evById(id)||{})){ toast("El plazo para contestar ya se ha cerrado"); return; } const v=(document.getElementById("nt-"+id)?.value||"").trim().slice(0,80);
       run(()=>F.updateDoc(dref("eventos",id), new F.FieldPath("notas",email()), v), v?"Comentario guardado":"Comentario quitado"); return; }
   if(d.evping){ run(()=>F.updateDoc(dref("eventos",d.evping),{avisar:true}),"Aviso enviado: llegará en unos minutos"); return; }
@@ -939,7 +942,7 @@ function openRival(id){
 }
 function renderScouting(){
   const box=$("#rivBox"); if(!box) return;
-  $("#rivNew").hidden=!S.canWrite;
+  $("#rivNew").hidden=!S.canWrite; $("#fbcvCard").hidden=!S.canWrite;
   const rs=[...S.rivales].sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"));
   const sel=$("#rivSel");
   sel.innerHTML='<option value="">— Elige rival —</option>'+rs.map(r=>`<option value="${esc(r.id)}">${esc(r.nombre)}</option>`).join("");
@@ -974,6 +977,7 @@ function handleScoutClick(t,d){
     i.value=""; i.blur();
     run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas"),{jugador:pid, texto:v.slice(0,500), autor:email(), nombre:myName(), creado:Date.now()}),"Nota añadida"); return true; }
   if(d.notadel){ run(()=>F.deleteDoc(F.doc(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas",d.notadel)),"Nota borrada"); return true; }
+  if(t.id==="fbcvBtn"){ importFBCV(); return true; }
   if(t.id==="rjAdd"){ const nombre=$("#rj-nombre").value.trim().toUpperCase(); if(!nombre){ toast("Escribe el nombre"); return true; }
     const dorsal=$("#rj-dorsal").value===""?null:+$("#rj-dorsal").value;
     run(()=>F.updateDoc(F.doc(col("rivales"),S.rivalOpen), new F.FieldPath("plantilla",uid6()), {nombre, dorsal, pos:$("#rj-pos").value.trim()}),"Jugador añadido")
@@ -983,6 +987,32 @@ function handleScoutClick(t,d){
   return false;
 }
 $("#rivSel").addEventListener("change",e=>openRival(e.target.value));
+async function importFBCV(){
+  const btn=$("#fbcvBtn"); btn.disabled=true; btn.textContent="Importando…";
+  try{
+    const data=await (await fetch("fbcv-2026-27.json",{cache:"no-cache"})).json();
+    const b=F.writeBatch(db); let nr=0, nj=0, np=0;
+    for(const [fid,r] of Object.entries(data.rivales)){
+      const id="fbcv-"+fid, ex=S.rivales.find(x=>x.id===id);
+      const ya=new Set(Object.values(ex?.plantilla||{}).map(j=>String(j.nombre).toUpperCase()));
+      const nuevos=r.jugadores.filter(n=>!ya.has(n.toUpperCase()));
+      if(!ex){ b.set(F.doc(col("rivales"),id),{nombre:r.nombre, entrenador:r.entrenador||"", fbcv:fid, creado:Date.now(),
+          plantilla:Object.fromEntries(nuevos.map(n=>[uid6(),{nombre:n, dorsal:null, pos:""}]))}); nr++; nj+=nuevos.length; }
+      else if(nuevos.length){ nuevos.forEach(n=>b.update(F.doc(col("rivales"),id), new F.FieldPath("plantilla",uid6()), {nombre:n, dorsal:null, pos:""})); nj+=nuevos.length; }
+    }
+    for(const p of data.partidos){
+      if(p.fecha<today()) continue;
+      const id="fbcv-"+p.fecha+"-"+p.rival;
+      if(S.eventos.some(ev=>ev.id===id || (ev.tipo==="partido" && ev.fecha===p.fecha))) continue;
+      const nombre=data.rivales[p.rival].nombre;
+      b.set(F.doc(col("eventos"),id),{tipo:"partido", fecha:p.fecha, hora:p.hora, nota:(p.casa?"en casa contra ":"fuera contra ")+nombre, lugar:p.lugar, rival:"fbcv-"+p.rival,
+        asistencia:{}, confirma:{}, notas:{}, notificada:true, creado:Date.now(), autor:S.user?.uid||""}); np++;
+    }
+    if(!nr && !nj && !np){ toast("Ya estaba todo importado"); return; }
+    await run(()=>b.commit(), `Importados: ${np} partidos, ${nr} rivales y ${nj} jugadores`);
+  }catch(e){ console.error(e); toast("No se pudo importar: "+errMsg(e)); }
+  finally{ btn.disabled=false; btn.textContent="📥 Importar calendario y plantillas de la FBCV"; }
+}
 $("#rivNew").addEventListener("submit",e=>{
   e.preventDefault(); const nombre=$("#rivNombre").value.trim(); if(!nombre){ toast("Escribe el nombre del rival"); return; }
   const ref=F.doc(col("rivales"));
