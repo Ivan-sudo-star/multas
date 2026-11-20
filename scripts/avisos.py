@@ -119,6 +119,7 @@ def avisar_multas():
         total += avisar_viernes_equipo(team, toks)
         total += avisar_planes(team, toks)
         total += pagos_equipo(team, toks)
+        total += aviso_fichajes(team, toks)
         nuevas = list(team.reference.collection("multas")
                       .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
         if not nuevas:
@@ -580,6 +581,26 @@ def pagos_equipo(team, toks):
         print(f"::notice::Recargos aplicados: {len(pend)}")
         hecho += 1
     return hecho
+
+
+def aviso_fichajes(team, toks):
+    """Día 1 de cada mes a partir de las 10:00: recordar a los administradores que revisen fichajes en la FBCV."""
+    ahora = datetime.now(TZ)
+    t = team.to_dict() or {}
+    ym = f"{ahora.year}-{ahora.month:02d}"
+    if ahora.day != 1 or ahora.hour < 10 or t.get("fichajesAviso") == ym:
+        return 0
+    rivales = [r for r in team.reference.collection("rivales").stream() if (r.to_dict() or {}).get("fbcv")]
+    if not rivales:
+        return 0
+    admins = {str(a).lower() for a in t.get("admins", [])}
+    emails = {p.id: str((p.to_dict() or {}).get("email", "")).lower() for p in team.reference.collection("jugadores").stream()}
+    mensajes = [(tok, "🔄 Revisa los fichajes de los rivales",
+                 f"Empieza {MESES[ahora.month - 1]}: mira en la FBCV si algún rival ha fichado y añádelo en Scouting.")
+                for tok, info in toks() if emails.get(info.get("jugador", "")) in admins]
+    send_each(mensajes, data={"tipo": "aviso"}, view="scouting")
+    team.reference.update({"fichajesAviso": ym})
+    return 1
 
 
 def avisar_viernes():

@@ -109,7 +109,7 @@ const isNew = m => (m.creado||0) > S.lastSeen && m.autor !== (S.user&&S.user.uid
 function totals(list){ let t=0,p=0; list.forEach(m=>{ t+=+m.importe||0; if(!m.pagada) p+=+m.importe||0; }); return {t, p, c:t-p}; }
 
 /* ---------- navegación ---------- */
-const VIEWS=["resumen","asistencia","anadir","planes","historial","equipo","ajustes","scouting"];
+const VIEWS=["resumen","asistencia","anadir","planes","historial","equipo","ajustes","scouting","ayuda"];
 function route(){
   document.querySelector("nav.tabs").hidden = !teamOpen; $(".pot").hidden = !teamOpen;
   if(!teamOpen){ document.querySelectorAll(".view").forEach(el=>{ el.hidden = el.id !== "v-inicio"; }); window.scrollTo(0,0); return; }
@@ -415,6 +415,7 @@ function renderAjustes(){
   $("#tcCrestDel").hidden = !S.aj.escudo;
   $("#nFriWrap").hidden = !S.aj.viernes;
   renderPagoCfg();
+  renderAyuda();
   { const pl=plazoCfg(); const t=typeById(pl.tipo);
     $("#plSummary").textContent = pl.activo
       ? `Recordatorio ${pl.aviso} h antes del entreno (si es por la mañana, el día anterior a las 17:00). El plazo para contestar se cierra ${pl.cierre} h antes (si es por la mañana, el día anterior a las 23:59). 1 h antes del cierre se avisa otra vez a quien no haya contestado. Quien no conteste recibe «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
@@ -549,6 +550,7 @@ document.addEventListener("click", e=>{
       const other=v && S.jug.find(p=>p.id!==d.mailsave && String(p.email||"").toLowerCase()===v);
       if(other){ toast("Ese correo ya es de "+other.nombre); return; }
       run(()=>F.updateDoc(dref("jugadores",d.mailsave),{email:v}), v?"Correo guardado":"Cuenta quitada"); return; }
+  if(d.ay){ showAyuda(d.ay); return; }
   if(handlePlanClick(t,d)) return;
   if(handleScoutClick(t,d)) return;
   if(d.dia!==undefined){ t.setAttribute("aria-pressed", t.getAttribute("aria-pressed")!=="true"); return; }
@@ -755,6 +757,19 @@ async function seedTeam(){
 }
 addEventListener("hashchange",route);
 
+
+/* ---------- manual de uso ---------- */
+let ayTab="todos";
+function showAyuda(t){ ayTab = (t==="admin" && S.canWrite) ? "admin" : "todos"; renderAyuda(); }
+function renderAyuda(){
+  if(!$("#v-ayuda")) return;
+  if(!S.canWrite) ayTab="todos";        // la parte de administradores solo la ven ellos
+  $("#ayTabAdmin").hidden=!S.canWrite;
+  $("#ayTabTodos").setAttribute("aria-pressed", ayTab==="todos");
+  $("#ayTabAdmin").setAttribute("aria-pressed", ayTab==="admin");
+  $("#ayTodos").hidden = ayTab!=="todos";
+  $("#ayAdmin").hidden = ayTab!=="admin";
+}
 
 /* ---------- días fijos de «No voy» ---------- */
 const DIAS_ORD=[[1,"Lun"],[2,"Mar"],[3,"Mié"],[4,"Jue"],[5,"Vie"],[6,"Sáb"],[0,"Dom"]];
