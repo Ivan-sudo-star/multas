@@ -396,12 +396,16 @@ def nombre_corto(nombre):
 
 
 def resumen_entrenador(team, eventos, toks, ahora):
-    """Al cerrarse el plazo: quién va, quién no y quién no ha contestado, solo para los entrenadores."""
+    """Al cerrarse el plazo: quién va, quién no y quién no ha contestado, para los entrenadores y el propietario."""
     jugadores = {p.id: p.to_dict() or {} for p in team.reference.collection("jugadores").stream()}
     entrenadores = {pid for pid, p in jugadores.items() if p.get("rol") == "entrenador" and p.get("activo") is not False}
-    tokens = [(tok, info) for tok, info in toks() if info.get("jugador") in entrenadores]
+    # También al propietario del equipo
+    propietario = str((team.to_dict() or {}).get("propietario", "")).lower()
+    destinatarios = entrenadores | {pid for pid, p in jugadores.items()
+                                    if propietario and str(p.get("email", "")).lower() == propietario}
+    tokens = [(tok, info) for tok, info in toks() if info.get("jugador") in destinatarios]
     if not tokens:
-        print("::notice::Resumen de asistencia: ningún entrenador con notificaciones activadas")
+        print("::notice::Resumen de asistencia: ni el entrenador ni el propietario tienen notificaciones activadas")
         return
     mensajes = []
     for evid, d in eventos.items():
