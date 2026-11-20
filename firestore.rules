@@ -52,6 +52,14 @@ service cloud.firestore {
       match /tipos/{id}  { allow read: if signedIn(); allow write: if isAdminOf(e); }
       match /multas/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
 
+      // Tablón de avisos: todos leen, solo los administradores escriben.
+      match /avisos/{id} {
+        allow read: if signedIn();
+        allow create: if isAdminOf(e) && request.resource.data.texto is string &&
+                         request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 300;
+        allow update, delete: if isAdminOf(e);
+      }
+
       // Entrenos y partidos. Cada jugador solo puede cambiar su propia respuesta (voy / no voy)
       // y su comentario; pasar lista, crear y borrar es cosa de los administradores.
       match /eventos/{id} {

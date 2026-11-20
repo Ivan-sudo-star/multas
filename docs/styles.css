@@ -178,3 +178,9 @@ input[type=file]{font-size:14px;min-height:44px}
 .asrow .bar{grid-column:1/-1;margin-top:0}
 .pct.lo{color:var(--orange)} .pct.hi{color:var(--ok)}
 nav.tabs a{font-size:10.5px}
+.avisos{border-color:var(--navy);box-shadow:inset 4px 0 0 var(--navy)}
+.aviso{background:var(--bg);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.aviso p{margin:0;white-space:pre-wrap;word-break:break-word;font-size:15px}
+.aviso.nuevo{background:var(--orange-soft)}
+.aviso .meta{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+textarea{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;font:inherit;font-size:16px;color:inherit;resize:vertical;text-transform:none;letter-spacing:0;font-weight:400}

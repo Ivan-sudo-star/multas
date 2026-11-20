@@ -68,6 +68,15 @@
   <div id="installBanner" class="info" hidden></div>
   <div id="fridayBanner" class="banner" hidden><p>Hoy es viernes: tiro de medio campo. El último paga 2 €.</p><button type="button" id="fridayBtn">Apuntar al último</button></div>
   <div id="status" class="info" hidden></div>
+  <div id="avisosCard" class="card avisos" hidden>
+    <div class="who-line"><h3>📣 Avisos</h3><span class="note" id="avCount"></span></div>
+    <ul class="list" id="avList"></ul>
+    <form id="avForm" novalidate hidden style="display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:10px">
+      <label class="f">Nuevo aviso para todo el equipo<textarea id="avText" maxlength="300" rows="3" placeholder="Ej.: Mañana traed la equipación blanca. Salimos a las 9:00 del pabellón."></textarea></label>
+      <div class="row"><button type="submit" class="btn" id="avSend">Enviar a todo el equipo</button><span class="note" id="avLeft">300</span></div>
+      <span class="note">Llega como notificación al móvil de todos los que tengan los avisos activados, y queda aquí en el tablón.</span>
+    </form>
+  </div>
   <div id="meCard" class="card" hidden></div>
   <div>
     <h2>Clasificación de multas</h2>

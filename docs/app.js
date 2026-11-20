@@ -50,7 +50,7 @@ const DEFAULT_TYPES = [
   ["Tiro medio campo (viernes, el último)",2,"fijo"]];
 
 const S = {
-  jug: [], tipos: [], multas: [], eventos: [], openEv: null, aj: {nombre:"", inicio:"", contador:"", admins:[], escudo:"", viernes:false},
+  jug: [], tipos: [], multas: [], eventos: [], avisos: [], showAllAv: false, openEv: null, aj: {nombre:"", inicio:"", contador:"", admins:[], escudo:"", viernes:false},
   ready: {j:false,t:false,m:false,a:false},
   user: null, canWrite: false,
   selType: null, selPlayers: new Set(), openRank: null,
@@ -145,6 +145,7 @@ function renderResumen(){
     (S.aj.inicio ? "Contando desde "+monthName(S.aj.inicio)+" · "+list.length+" multas" : "Contando todas las multas · "+list.length+" en total");
   $("#countedBy").textContent = S.aj.contador ? "Conteo: "+S.aj.contador+" · Multas en efectivo" : "Multas en efectivo";
   $("#fridayBanner").hidden = !(new Date().getDay()===5 && S.aj.viernes && S.prefs.fri);
+  renderAvisos();
   renderMe();
   const me = myPlayer();
 
@@ -172,6 +173,29 @@ function renderResumen(){
         ${r.pend>0&&S.canWrite?`<div class="row end"><button type="button" class="btn ok small" data-payall="${esc(r.p.id)}">Cobrar todo (${eur(r.pend)})</button></div>`:""}</div>`:""}
     </li>`;
   }).join("");
+}
+
+/* ---------- tablón de avisos ---------- */
+function haceCuanto(ms){
+  const m=Math.round((Date.now()-ms)/60000);
+  if(m<1) return "ahora"; if(m<60) return "hace "+m+" min";
+  const h=Math.round(m/60); if(h<24) return "hace "+h+" h";
+  return new Date(ms).toLocaleDateString("es-ES",{day:"numeric",month:"short"});
+}
+function renderAvisos(){
+  const card=$("#avisosCard"); if(!card) return;
+  const list=[...S.avisos].sort((a,b)=>(b.creado||0)-(a.creado||0));
+  card.hidden = !teamOpen || (!list.length && !S.canWrite);
+  $("#avForm").hidden=!S.canWrite;
+  const seen=store.get("multas.avSeen."+TEAM,0);
+  const shown=S.showAllAv?list:list.slice(0,3);
+  $("#avCount").textContent = list.length>3 ? list.length+" avisos" : "";
+  $("#avList").innerHTML = shown.length ? shown.map(a=>`<li class="aviso ${(a.creado||0)>seen&&a.autor!==S.user?.uid?"nuevo":""}">
+      <p>${esc(a.texto)}</p>
+      <span class="meta"><span>${esc(a.autorNombre||"Administrador")} · ${esc(haceCuanto(a.creado||0))}</span>${S.canWrite?`<button type="button" class="btn small danger" data-avdel="${esc(a.id)}">Borrar</button>`:""}</span>
+    </li>`).join("") + (list.length>3?`<li><button type="button" class="btn small ghost" id="avMore">${S.showAllAv?"Ver menos":"Ver todos ("+list.length+")"}</button></li>`:"")
+    : '<li class="note">Todavía no hay avisos. Escribe el primero abajo.</li>';
+  if(list.length && !$("#v-resumen").hidden){ clearTimeout(S.avSeenT); S.avSeenT=setTimeout(()=>store.set("multas.avSeen."+TEAM,Date.now()),4000); }
 }
 
 function renderMe(){
@@ -465,7 +489,7 @@ async function listenForeground(){
   if(fgOn || !(await pushSupported())) return; fgOn=true;
   messaging = messaging || M.getMessaging(app);
   // Con la app abierta ya avisamos con el aviso en pantalla; aquí solo el recordatorio del viernes.
-  M.onMessage(messaging, p=>{ const t=p?.data?.tipo; if(t==="viernes"||t==="evento") toast((t==="evento"?(p.notification?.title||"")+": ":"")+(p.notification?.body||"")); });
+  M.onMessage(messaging, p=>{ const t=p?.data?.tipo; if(t==="viernes"||t==="evento"||t==="aviso") toast((t==="evento"?(p.notification?.title||"")+": ":"")+(p.notification?.body||"")); });
 }
 function tokenData(){ return { equipo: TEAM, uid:S.user?.uid||"", jugador: myPlayer()?.id||"", solo_mias: !!(S.prefs.mine && myPlayer()), viernes: !!S.prefs.fri, creado: Date.now(), ios: isIOS }; }
 async function syncTokenPrefs(){
@@ -492,6 +516,8 @@ document.addEventListener("click", e=>{
       const other=v && S.jug.find(p=>p.id!==d.mailsave && String(p.email||"").toLowerCase()===v);
       if(other){ toast("Ese correo ya es de "+other.nombre); return; }
       run(()=>F.updateDoc(dref("jugadores",d.mailsave),{email:v}), v?"Correo guardado":"Cuenta quitada"); return; }
+  if(t.id==="avMore"){ S.showAllAv=!S.showAllAv; renderAvisos(); return; }
+  if(d.avdel){ armed(t,"¿Borrar? Toca otra vez",()=>run(()=>F.deleteDoc(dref("avisos",d.avdel)),"Aviso borrado")); return; }
   if(t.id==="evMore"){ S.showAllPast=true; renderAsis(); return; }
   if(d.evopen){ S.openEv = S.openEv===d.evopen?null:d.evopen; renderAsis(); return; }
   if(d.rsvp){ const [id,v]=d.rsvp.split("|"); const ev=evById(id); const me=myPlayer(); if(!ev||!me) return;
@@ -556,6 +582,14 @@ $("#nFri").addEventListener("change",e=>{ S.prefs.fri=e.target.checked; store.se
 $("#fridayBtn").addEventListener("click",()=>{ const t=S.tipos.find(x=>/medio campo/i.test(x.nombre)); if(t) S.selType=t.id; S.selPlayers.clear(); location.hash="anadir"; renderAdd(); });
 $("#tcFri").addEventListener("change",e=>run(()=>F.updateDoc(teamRef(),{viernes:e.target.checked}),e.target.checked?"Recordatorio activado para todo el equipo":"Recordatorio desactivado"));
 $("#tcFile").addEventListener("change",e=>{ const f=e.target.files?.[0]; if(f) setCrest(f); e.target.value=""; });
+$("#avText").addEventListener("input",()=>{ $("#avLeft").textContent=300-$("#avText").value.length; });
+$("#avForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const texto=$("#avText").value.trim(); if(!texto){ toast("Escribe el aviso"); return; }
+  const btn=$("#avSend"); btn.disabled=true;
+  run(()=>F.addDoc(col("avisos"),{texto, autor:S.user?.uid||"", autorNombre:myPlayer()?.nombre||email(), creado:Date.now(), notificada:false}),"Aviso publicado. La notificación llegará en unos minutos")
+    .then(ok=>{ btn.disabled=false; if(ok){ $("#avText").value=""; $("#avLeft").textContent="300"; } });
+});
 $("#evForm").addEventListener("submit",e=>{
   e.preventDefault();
   const fecha=$("#evFecha").value; if(!fecha){ toast("Elige la fecha"); return; }
@@ -662,6 +696,13 @@ function subscribe(){
   unsubs.push(F.onSnapshot(col("jugadores"), s=>{ S.jug=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.j=true; done(s);
     const mid=myPlayer()?.id||""; if(mid!==S.meId){ S.meId=mid; syncTokenPrefs(); }
     renderAll(); }, fail));
+  let firstAv=true;
+  unsubs.push(F.onSnapshot(col("avisos"), s=>{
+    S.avisos=s.docs.map(d=>({id:d.id,...d.data()}));
+    if(!firstAv){ const nuevos=s.docChanges().filter(c=>c.type==="added"&&!c.doc.metadata.hasPendingWrites).map(c=>c.doc.data()).filter(a=>a.autor!==S.user?.uid);
+      if(nuevos.length) toast("📣 "+nuevos[0].texto.slice(0,90)); }
+    if(!s.metadata.fromCache) firstAv=false;
+    renderAvisos(); }, fail));
   unsubs.push(F.onSnapshot(col("eventos"), s=>{ S.eventos=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.e=true; done(s); renderAsis(); renderHeader(); }, fail));
   unsubs.push(F.onSnapshot(col("tipos"), s=>{ S.tipos=s.docs.map(d=>({id:d.id,...d.data()})); S.ready.t=true; done(s); renderAll(); }, fail));
   unsubs.push(F.onSnapshot(teamRef(), s=>{
@@ -691,7 +732,7 @@ function subscribe(){
 /* ---------- equipos: entrar, crear, cambiar ---------- */
 function resetTeamState(){
   unsubs.forEach(u=>u()); unsubs=[];
-  Object.assign(S,{jug:[],tipos:[],multas:[],eventos:[],openEv:null,aj:{nombre:"",inicio:"",contador:"",admins:[],escudo:"",viernes:false},ready:{j:false,t:false,m:false,a:false},canWrite:false,selType:null,openRank:null,meId:undefined});
+  Object.assign(S,{jug:[],tipos:[],multas:[],eventos:[],avisos:[],showAllAv:false,openEv:null,aj:{nombre:"",inicio:"",contador:"",admins:[],escudo:"",viernes:false},ready:{j:false,t:false,m:false,a:false},canWrite:false,selType:null,openRank:null,meId:undefined});
   S.selPlayers=new Set(); ajFilled=false;
 }
 function rememberTeam(id, nombre){

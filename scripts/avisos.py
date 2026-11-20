@@ -51,7 +51,14 @@ def webpush_cfg(view):
     if not APP_URL.startswith("https://"):
         return None
     return messaging.WebpushConfig(
-        notification=messaging.WebpushNotification(icon=APP_URL + "icons/icon-192.png"),
+        headers={"Urgency": "high"},
+        notification=messaging.WebpushNotification(
+            icon=APP_URL + "icons/icon-192.png",
+            badge=APP_URL + "icons/badge-96.png",   # icono pequeño de la barra de estado (Android)
+            vibrate=[200, 100, 200],
+            renotify=True,
+            tag=view,
+        ),
         fcm_options=messaging.WebpushFCMOptions(link=APP_URL + "#" + view),
     )
 
@@ -107,6 +114,7 @@ def avisar_multas():
                 toks_team = tokens_by_team()
             return toks_team.get(team_id, [])
         total += avisar_eventos(team, toks)
+        total += avisar_tablon(team, toks)
         nuevas = list(team.reference.collection("multas")
                       .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
         if not nuevas:
@@ -133,20 +141,20 @@ def avisar_equipo(nombre, multas, tokens):
         if not mias and all(m.get("autor") == uid for m in multas):
             continue
         if mias:
-            title = "Te han puesto una multa" if len(mias) == 1 else f"Te han puesto {len(mias)} multas"
+            title = "💸 Te han puesto una multa" if len(mias) == 1 else f"💸 Te han puesto {len(mias)} multas"
             body = " / ".join(describe(m) for m in mias)
             otras = len(multas) - len(mias)
             if otras:
                 body += f" (+{otras} al resto)"
         elif len(multas) == 1:
             m = multas[0]
-            title, body = "Nueva multa", f"{m.get('jugadorNombre', '')} · {describe(m)}"
+            title, body = "💸 Nueva multa", f"{m.get('jugadorNombre', '')} · {describe(m)}"
         else:
             por = {}
             for m in multas:
                 n = m.get("jugadorNombre", "?")
                 por[n] = por.get(n, 0) + float(m.get("importe") or 0)
-            title = f"{len(multas)} multas nuevas"
+            title = f"💸 {len(multas)} multas nuevas"
             body = ", ".join(f"{n} {eur(v)}" for n, v in sorted(por.items(), key=lambda x: -x[1]))
         if nombre:
             title += f" · {nombre}"
@@ -172,6 +180,23 @@ def send_each(mensajes, data=None, view="historial"):
     for tok in dead:
         db.collection("tokens").document(tok).delete()
     print(f"Enviadas {sent}, borrados {len(dead)} móviles inactivos")
+
+
+def avisar_tablon(team, toks):
+    """Avisos que escriben los administradores en el tablón: a todo el equipo."""
+    nuevos = list(team.reference.collection("avisos")
+                  .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
+    if not nuevos:
+        return 0
+    nombre = (team.to_dict() or {}).get("nombre", "")
+    tokens = toks()
+    for d in nuevos:
+        a = d.to_dict() or {}
+        title = f"📣 {a.get('autorNombre') or 'Aviso'}" + (f" · {nombre}" if nombre else "")
+        mensajes = [(tok, title, str(a.get("texto", ""))[:200]) for tok, info in tokens if info.get("uid") != a.get("autor")]
+        send_each(mensajes, data={"tipo": "aviso"}, view="resumen")
+        d.reference.update({"notificada": True})
+    return len(nuevos)
 
 
 TZ = ZoneInfo("Europe/Madrid")
@@ -224,7 +249,7 @@ def avisar_eventos(team, toks):
             if es_nuevo:
                 if info.get("uid") == ev.get("autor"):
                     continue
-                title = f"Nuevo {tipo} · {nombre}" if nombre else f"Nuevo {tipo}"
+                title = f"🏀 Nuevo {tipo} · {nombre}" if nombre else f"🏀 Nuevo {tipo}"
                 body = f"{que.capitalize()} {cuando(ev, hoy)}."
                 if (ev.get("serie") or 0) > 1:
                     body += f" Se repite cada semana ({ev['serie']} semanas)."
@@ -232,7 +257,7 @@ def avisar_eventos(team, toks):
             else:
                 if c == "no":
                     continue
-                title = f"Recordatorio: {tipo} {cuando(ev, hoy)}"
+                title = f"⏰ {tipo.capitalize()} {cuando(ev, hoy)}"
                 body = "Te esperamos." if c == "si" else "¿Vas? Contesta en la app para que el entrenador sepa cuántos seréis."
                 if ev.get("nota"):
                     body = f"{ev['nota']}. {body}"
@@ -262,7 +287,7 @@ def avisar_viernes():
     toks = [tok for team, lst in tokens_by_team().items() if team in activos
             for tok, info in lst if info.get("viernes", True)]
     if toks:
-        send(toks, "Tiro de medio campo", "Hoy es viernes: el último en meter paga 2 €.", {"tipo": "viernes"}, view="anadir")
+        send(toks, "🎯 Tiro de medio campo", "Hoy es viernes: el último en meter paga 2 €.", {"tipo": "viernes"}, view="anadir")
     else:
         print("Nadie a quien recordar")
 
