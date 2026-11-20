@@ -1,7 +1,8 @@
 """Envía las notificaciones push de la app de multas.
 
 Lo ejecuta GitHub Actions gratis (ver .github/workflows/avisos.yml):
-  python scripts/avisos.py multas    -> avisa de las multas nuevas
+  python scripts/avisos.py multas    -> avisa de las multas nuevas y de entrenos/partidos
+                                        (nuevos, «avisar ahora» y recordatorio del mismo día)
   python scripts/avisos.py viernes   -> recordatorio del tiro de medio campo
 Necesita la variable FIREBASE_SERVICE_ACCOUNT (el JSON de la cuenta de servicio)
 y, opcionalmente, APP_URL (la dirección de la app, terminada en /).
@@ -9,6 +10,8 @@ y, opcionalmente, APP_URL (la dirección de la app, terminada en /).
 import json
 import os
 import sys
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 if not os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip():
     print("Notificaciones sin configurar (falta el secreto FIREBASE_SERVICE_ACCOUNT). No se envía nada.")
@@ -98,21 +101,25 @@ def avisar_multas():
     toks_team = None
     total = 0
     for team in db.collection("equipos").stream():
+        def toks(team_id=team.id):
+            nonlocal toks_team
+            if toks_team is None:
+                toks_team = tokens_by_team()
+            return toks_team.get(team_id, [])
+        total += avisar_eventos(team, toks)
         nuevas = list(team.reference.collection("multas")
                       .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
         if not nuevas:
             continue
         total += len(nuevas)
-        if toks_team is None:
-            toks_team = tokens_by_team()
         nombre = (team.to_dict() or {}).get("nombre", "")
-        avisar_equipo(nombre, [d.to_dict() for d in nuevas], toks_team.get(team.id, []))
+        avisar_equipo(nombre, [d.to_dict() for d in nuevas], toks())
         batch = db.batch()
         for d in nuevas:
             batch.update(d.reference, {"notificada": True})
         batch.commit()
     if not total:
-        print("No hay multas nuevas")
+        print("Nada que avisar")
 
 
 def avisar_equipo(nombre, multas, tokens):
@@ -165,6 +172,88 @@ def send_each(mensajes, data=None, view="historial"):
     for tok in dead:
         db.collection("tokens").document(tok).delete()
     print(f"Enviadas {sent}, borrados {len(dead)} móviles inactivos")
+
+
+TZ = ZoneInfo("Europe/Madrid")
+DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+TIPO = {"entreno": "entreno", "partido": "partido"}
+RECORDAR_ANTES = timedelta(hours=3)
+
+
+def cuando(ev, hoy):
+    d = date.fromisoformat(ev["fecha"])
+    txt = "hoy" if d == hoy else "mañana" if d == hoy + timedelta(days=1) else f"el {DIAS[d.weekday()]} {d.day}"
+    return txt + (f" a las {ev['hora']}" if ev.get("hora") else "")
+
+
+def avisar_eventos(team, toks):
+    """Entrenos y partidos: nuevos, «avisar a todos ahora» y recordatorio del mismo día."""
+    ahora = datetime.now(TZ)
+    hoy = ahora.date()
+    ref = team.reference.collection("eventos")
+    F = firestore.FieldFilter
+    nuevos = {d.id: d for d in ref.where(filter=F("notificada", "==", False)).stream()}
+    pedidos = {d.id: d for d in ref.where(filter=F("avisar", "==", True)).stream()}
+    recordar = {}
+    for d in ref.where(filter=F("fecha", "==", hoy.isoformat())).stream():
+        ev = d.to_dict() or {}
+        if ev.get("recordado"):
+            continue
+        if ev.get("hora"):
+            h, m = (int(x) for x in ev["hora"].split(":")[:2])
+            empieza = datetime.combine(hoy, time(h, m), TZ)
+            if empieza - RECORDAR_ANTES <= ahora <= empieza + timedelta(hours=1):
+                recordar[d.id] = d
+        elif ahora.hour >= 10:
+            recordar[d.id] = d
+    if not (nuevos or pedidos or recordar):
+        return 0
+
+    nombre = (team.to_dict() or {}).get("nombre", "")
+    emails = {p.id: str((p.to_dict() or {}).get("email", "")).lower() for p in team.reference.collection("jugadores").stream()}
+    tokens = toks()
+    mensajes, cambios = [], {}
+    for evid in set(nuevos) | set(pedidos) | set(recordar):
+        d = nuevos.get(evid) or pedidos.get(evid) or recordar.get(evid)
+        ev = d.to_dict() or {}
+        tipo = TIPO.get(ev.get("tipo"), "evento")
+        que = f"{tipo}{' · ' + ev['nota'] if ev.get('nota') else ''}"
+        es_nuevo = evid in nuevos
+        for tok, info in tokens:
+            c = (ev.get("confirma") or {}).get(emails.get(info.get("jugador", ""), ""), "")
+            if es_nuevo:
+                if info.get("uid") == ev.get("autor"):
+                    continue
+                title = f"Nuevo {tipo} · {nombre}" if nombre else f"Nuevo {tipo}"
+                body = f"{que.capitalize()} {cuando(ev, hoy)}."
+                if (ev.get("serie") or 0) > 1:
+                    body += f" Se repite cada semana ({ev['serie']} semanas)."
+                body += " ¿Vas? Contesta en la app."
+            else:
+                if c == "no":
+                    continue
+                title = f"Recordatorio: {tipo} {cuando(ev, hoy)}"
+                body = "Te esperamos." if c == "si" else "¿Vas? Contesta en la app para que el entrenador sepa cuántos seréis."
+                if ev.get("nota"):
+                    body = f"{ev['nota']}. {body}"
+            mensajes.append((tok, title, body[:200]))
+        upd = {}
+        if es_nuevo:
+            upd["notificada"] = True
+            if evid in recordar:
+                upd["recordado"] = True
+        if evid in pedidos:
+            upd["avisar"] = False
+            upd["avisadoEn"] = int(ahora.timestamp() * 1000)
+        if evid in recordar:
+            upd["recordado"] = True
+        cambios[d.reference] = upd
+    send_each(mensajes, data={"tipo": "evento"}, view="asistencia")
+    batch = db.batch()
+    for r, upd in cambios.items():
+        batch.update(r, upd)
+    batch.commit()
+    return len(cambios)
 
 
 def avisar_viernes():

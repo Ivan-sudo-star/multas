@@ -40,6 +40,21 @@ service cloud.firestore {
       }
       match /tipos/{id}  { allow read: if signedIn(); allow write: if isAdminOf(e); }
       match /multas/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
+
+      // Entrenos y partidos. Cada jugador solo puede cambiar su propia respuesta (voy / no voy)
+      // y su comentario; pasar lista, crear y borrar es cosa de los administradores.
+      match /eventos/{id} {
+        allow read: if signedIn();
+        allow create, delete: if isAdminOf(e);
+        allow update: if isAdminOf(e) || (
+          hasEmail() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirma', 'notas']) &&
+          request.resource.data.get('confirma', {}).diff(resource.data.get('confirma', {})).affectedKeys().hasOnly([myEmail()]) &&
+          request.resource.data.get('notas', {}).diff(resource.data.get('notas', {})).affectedKeys().hasOnly([myEmail()]) &&
+          request.resource.data.get('confirma', {}).get(myEmail(), '') in ['si', 'no', ''] &&
+          request.resource.data.get('notas', {}).get(myEmail(), '').size() <= 80
+        );
+      }
     }
 
     // Lista de equipos de cada persona (solo la ve ella misma)
