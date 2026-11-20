@@ -348,7 +348,8 @@ def multar_sin_respuesta(team, pl, eventos):
         ev = d.to_dict() or {}
         upd = {"plazoCerrado": True, "multadosPlazo": []}
         cierre = cierre_de(ev, pl)
-        # Si el entreno se creó ya con el plazo casi cerrado, no se multa
+        # Si el entreno se creó ya con el plazo casi cerrado, no se multa.
+        # (El cierre lo calcula la app: entrenos de mañana → día anterior a las 23:59.)
         creado = datetime.fromtimestamp((ev.get("creado") or 0) / 1000, TZ)
         if tipo and ev.get("tipo") == "entreno" and cierre and creado < cierre - timedelta(hours=1):
             confirma = ev.get("confirma") or {}

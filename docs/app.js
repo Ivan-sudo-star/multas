@@ -233,6 +233,13 @@ const plazoCfg = () => { const p=S.aj.plazo||{}; return {activo:!!p.activo, avis
 const fmtHora = ms => new Date(ms).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
 const fmtCierre = ms => { const d=new Date(ms), t=new Date(); const same=d.toDateString()===t.toDateString();
   return (same?"hoy":d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"}))+" a las "+fmtHora(ms); };
+// Cierre del plazo: entrenos de mañana (antes de las 14:00) → el día anterior a las 23:59; el resto → X horas antes
+const MANANA_HASTA = 14;
+function calcCierre(fecha, hora, horasAntes){
+  const start=new Date(fecha+"T"+hora);
+  if(start.getHours() < MANANA_HASTA){ const d=new Date(start); d.setDate(d.getDate()-1); d.setHours(23,59,0,0); return d.getTime(); }
+  return start.getTime() - horasAntes*3600e3;
+}
 const isClosed = ev => !!ev.cierre && Date.now() >= ev.cierre;
 const pctTxt = (a,b) => b ? Math.round(a/b*100)+"%" : "–";
 function asStats(){
@@ -405,7 +412,7 @@ function renderAjustes(){
   $("#nFriWrap").hidden = !S.aj.viernes;
   { const pl=plazoCfg(); const t=typeById(pl.tipo);
     $("#plSummary").textContent = pl.activo
-      ? `Recordatorio ${pl.aviso} h antes del entreno (si es por la mañana, el día anterior a las 17:00). El plazo para contestar se cierra ${pl.cierre} h antes; quien no conteste recibe «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
+      ? `Recordatorio ${pl.aviso} h antes del entreno (si es por la mañana, el día anterior a las 17:00). El plazo para contestar se cierra ${pl.cierre} h antes (si es por la mañana, el día anterior a las 23:59); quien no conteste recibe «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
       : "Desactivado: no hay plazo ni multa por no contestar. Los recordatorios llegan 8 h antes.";
     $("#plEdit").hidden = !S.canWrite;
     if(S.canWrite && !document.activeElement?.closest("#plazoForm")){
@@ -614,7 +621,7 @@ $("#plazoForm").addEventListener("submit",e=>{
   let n=0;
   S.eventos.filter(ev=>ev.tipo==="entreno" && ev.hora && ev.fecha>=today() && !ev.plazoCerrado).forEach(ev=>{
     const start=new Date(ev.fecha+"T"+ev.hora).getTime(); if(start<=Date.now()) return;
-    b.update(dref("eventos",ev.id), activo ? {cierre:start-cierre*3600e3, plazoTipo:tipo} : {cierre:F.deleteField(), plazoTipo:F.deleteField()}); n++;
+    b.update(dref("eventos",ev.id), activo ? {cierre:calcCierre(ev.fecha, ev.hora, cierre), plazoTipo:tipo} : {cierre:F.deleteField(), plazoTipo:F.deleteField()}); n++;
   });
   run(()=>b.commit(),"Plazo guardado"+(n?" y aplicado a "+n+" entrenos próximos":"")).then(()=>document.activeElement?.blur());
 });
@@ -639,7 +646,7 @@ $("#evForm").addEventListener("submit",e=>{
   const b=F.writeBatch(db); const [y,m,dd]=fecha.split("-").map(Number);
   for(let i=0;i<rep;i++){ const d=new Date(y,m-1,dd+7*i); const f=d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
     const extra={};
-    if(pl.activo && tipoEv==="entreno" && horaEv){ extra.cierre = new Date(f+"T"+horaEv).getTime() - pl.cierre*3600e3; extra.plazoTipo = pl.tipo; }
+    if(pl.activo && tipoEv==="entreno" && horaEv){ extra.cierre = calcCierre(f, horaEv, pl.cierre); extra.plazoTipo = pl.tipo; }
     b.set(F.doc(col("eventos")),{...base, ...extra, fecha:f, serie:i===0?rep:0, notificada:i>0}); }
   run(()=>b.commit(), rep>1 ? rep+" "+(base.tipo==="partido"?"partidos":"entrenos")+" creados (uno cada semana)" : (EV_TXT[base.tipo]||"Evento")+" creado").then(ok=>{ if(ok){ $("#evNota").value=""; $("#evRep").value="1"; } });
 });
