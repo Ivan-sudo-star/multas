@@ -120,6 +120,8 @@ def avisar_multas():
         total += avisar_planes(team, toks)
         total += pagos_equipo(team, toks)
         total += aviso_fichajes(team, toks)
+        total += avisar_scouting(team, toks)
+        total += previa_partido(team, toks)
         nuevas = list(team.reference.collection("multas")
                       .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
         if not nuevas:
@@ -585,6 +587,60 @@ def pagos_equipo(team, toks):
         print(f"::notice::Recargos aplicados: {len(pend)}")
         hecho += 1
     return hecho
+
+
+def avisar_scouting(team, toks):
+    """Notas de scouting nuevas: a todo el equipo (también a quien la escribe), agrupadas por rival."""
+    enviados = 0
+    for r in team.reference.collection("rivales").stream():
+        nuevas = list(r.reference.collection("notas").where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
+        if not nuevas:
+            continue
+        rv = r.to_dict() or {}
+        plantilla = rv.get("plantilla") or {}
+        notas = [n.to_dict() or {} for n in nuevas]
+        title = f"🔎 Scouting · {rv.get('nombre', 'rival')}"
+        if len(notas) == 1:
+            n = notas[0]
+            j = plantilla.get(n.get("jugador", "")) or {}
+            quien = (f"#{j['dorsal']} " if j.get("dorsal") not in (None, "") else "") + str(j.get("nombre", "")).title() if j else "Equipo"
+            body = f"{nombre_corto(n.get('nombre'))} sobre {quien}: {n.get('texto', '')}"
+        else:
+            autores = sorted({nombre_corto(n.get("nombre")) for n in notas})
+            body = f"{len(notas)} notas nuevas de {', '.join(autores)}. Míralas antes del partido."
+        send_each([(tok, title, body[:200]) for tok, _ in toks()], data={"tipo": "aviso"}, view="scouting")
+        batch = db.batch()
+        for n in nuevas:
+            batch.update(n.reference, {"notificada": True})
+        batch.commit()
+        enviados += 1
+    return enviados
+
+
+def previa_partido(team, toks):
+    """El día antes de cada partido, a partir de las 19:00: recordar el scouting del rival a todo el equipo."""
+    ahora = datetime.now(TZ)
+    if ahora.hour < 19:
+        return 0
+    manana = (ahora.date() + timedelta(days=1)).isoformat()
+    hechos = 0
+    for d in team.reference.collection("eventos").where(filter=firestore.FieldFilter("fecha", "==", manana)).stream():
+        ev = d.to_dict() or {}
+        if ev.get("tipo") != "partido" or not ev.get("rival") or ev.get("scoutPrevia"):
+            continue
+        r = team.reference.collection("rivales").document(ev["rival"]).get()
+        if not r.exists:
+            continue
+        n = sum(1 for _ in r.reference.collection("notas").stream())
+        nombre = (r.to_dict() or {}).get("nombre", "el rival")
+        hora = f" a las {ev['hora']}" if ev.get("hora") else ""
+        title = f"🔎 Mañana{hora} contra {nombre}"
+        body = (f"Hay {n} nota{'s' if n != 1 else ''} de scouting. Échales un vistazo antes del partido."
+                if n else "Todavía no hay notas de scouting. Si sabes algo de ellos, apúntalo en la app.")
+        send_each([(tok, title, body) for tok, _ in toks()], data={"tipo": "aviso"}, view="scouting")
+        d.reference.update({"scoutPrevia": True})
+        hechos += 1
+    return hechos
 
 
 def aviso_fichajes(team, toks):

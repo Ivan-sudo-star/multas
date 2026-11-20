@@ -1,0 +1,76 @@
+{
+ "fbcv-11600": {
+  "rival": "MEDMARKET BENIDORM",
+  "jugadores": [
+   {
+    "nombre": "JORGE SANCHEZ",
+    "dorsal": "35",
+    "pos": "Base (1)",
+    "nota": "Base intenso."
+   },
+   {
+    "nombre": "MARIO JIMENA",
+    "dorsal": "4",
+    "pos": "Escolta (2)",
+    "nota": "Tirador. Se sale rápido de los bloqueos."
+   },
+   {
+    "nombre": "JORGE FERRANDO",
+    "dorsal": "8",
+    "pos": "Base (1)",
+    "nota": "Base penetrador."
+   },
+   {
+    "nombre": "M. D.",
+    "alias": "M.D.L.R.",
+    "pos": "Pívot (5)",
+    "nota": "Muy flojo."
+   },
+   {
+    "nombre": "JORDAN GARCIA",
+    "dorsal": "1",
+    "pos": "Alero (3)"
+   },
+   {
+    "nombre": "IVAN MARCET",
+    "pos": "Ala-pívot / Pívot (4-5)",
+    "nota": "El mejor del equipo. Juega de todo y busca el contacto."
+   },
+   {
+    "nombre": "HECTOR SANCHEZ",
+    "nuevo": true,
+    "pos": "Base (1)",
+    "nota": "Junior. Manejador, tira de 2."
+   },
+   {
+    "nombre": "KIRIL GEORGIEV",
+    "nuevo": true,
+    "pos": "Escolta (2)",
+    "nota": "Pequeño, penetrador."
+   },
+   {
+    "nombre": "ALEX ROLDAN",
+    "dorsal": "24",
+    "pos": "Base (1)",
+    "nota": "Base flojito."
+   },
+   {
+    "nombre": "PEDRO VERA",
+    "dorsal": "23",
+    "pos": "Pívot (5)",
+    "nota": "Grandecito pero bastante flojo."
+   },
+   {
+    "nombre": "DABERECHUKWU PEDRO OFORAOH",
+    "dorsal": "17",
+    "nota": "Flojo."
+   },
+   {
+    "nombre": "RONALDO ANDRES LEON",
+    "dorsal": "50",
+    "pos": "Pívot (5)",
+    "nota": "Juega de 5 aunque es bajito. Pelo rizado."
+   }
+  ]
+ }
+}

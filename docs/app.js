@@ -1016,9 +1016,10 @@ function handleScoutClick(t,d){
   if(d.scout){ openRival(d.scout); location.hash="scouting"; return true; }
   if(d.notaadd!==undefined){ const pid=d.notaadd; const i=document.getElementById("rn-"+(pid||"gen")); const v=(i?.value||"").trim(); if(!v){ toast("Escribe la nota"); return true; }
     i.value=""; i.blur();
-    run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas"),{jugador:pid, texto:v.slice(0,500), autor:email(), nombre:myName(), creado:Date.now()}),"Nota añadida"); return true; }
+    run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas"),{jugador:pid, texto:v.slice(0,500), autor:email(), nombre:myName(), creado:Date.now(), notificada:false}),"Nota añadida. Se avisará al equipo"); return true; }
   if(d.notadel){ run(()=>F.deleteDoc(F.doc(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas",d.notadel)),"Nota borrada"); return true; }
   if(t.id==="fbcvBtn"){ importFBCV(); return true; }
+  if(t.id==="prepBtn"){ importPreparado(); return true; }
   if(t.id==="dorMode"){ S.dorsalMode=!S.dorsalMode; S.rjEdit=null; renderScouting(); return true; }
   if(t.id==="dorSave"){
     const r=S.rivales.find(x=>x.id===S.rivalOpen); if(!r) return true;
@@ -1043,6 +1044,37 @@ function handleScoutClick(t,d){
   return false;
 }
 $("#rivSel").addEventListener("change",e=>openRival(e.target.value));
+// Scouting preparado (notas, posiciones y jugadores que faltan), desde docs/scouting-preparado.json
+async function importPreparado(){
+  const btn=$("#prepBtn"); btn.disabled=true;
+  try{
+    const data=await (await fetch("scouting-preparado.json",{cache:"no-cache"})).json();
+    const key=n=>String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[.\s]+/g," ").trim();
+    let nn=0, np=0, nu=0;
+    for(const [rid,info] of Object.entries(data)){
+      const r=S.rivales.find(x=>x.id===rid); if(!r){ toast("Primero importa los rivales de la FBCV"); continue; }
+      const ya=Object.entries(r.plantilla||{}).map(([pid,j])=>({pid,...j}));
+      const existentes=(await F.getDocs(F.collection(db,"equipos",TEAM,"rivales",rid,"notas"))).docs.map(d=>d.data());
+      const b=F.writeBatch(db); const args=[];
+      for(const j of info.jugadores){
+        let p=ya.find(x=>key(x.nombre)===key(j.nombre)||(j.alias&&key(x.nombre)===key(j.alias)));
+        let pid=p?.pid;
+        if(!p){ pid=uid6(); args.push(new F.FieldPath("plantilla",pid),{nombre:j.nombre, dorsal:j.dorsal??null, pos:j.pos||""}); np++; }
+        else{
+          if(j.pos && p.pos!==j.pos){ args.push(new F.FieldPath("plantilla",pid,"pos"), j.pos); nu++; }
+          if(j.dorsal!=null && (p.dorsal===null||p.dorsal===undefined||p.dorsal==="")){ args.push(new F.FieldPath("plantilla",pid,"dorsal"), j.dorsal); nu++; }
+        }
+        if(j.nota && !existentes.some(n=>n.jugador===pid && n.texto===j.nota)){
+          b.set(F.doc(F.collection(db,"equipos",TEAM,"rivales",rid,"notas")),{jugador:pid, texto:j.nota, autor:email(), nombre:myName(), creado:Date.now(), notificada:false}); nn++;
+        }
+      }
+      if(args.length) b.update(F.doc(col("rivales"),rid), ...args);
+      if(args.length||nn) await b.commit();
+    }
+    toast(nn||np||nu ? `Cargado: ${nn} notas, ${np} jugadores nuevos, ${nu} posiciones/dorsales` : "Ya estaba todo cargado");
+  }catch(e){ console.error(e); toast("No se pudo cargar: "+errMsg(e)); }
+  finally{ btn.disabled=false; }
+}
 async function importFBCV(){
   const btn=$("#fbcvBtn"); btn.disabled=true; btn.textContent="Importando…";
   try{
