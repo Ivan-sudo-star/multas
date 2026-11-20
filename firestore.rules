@@ -47,10 +47,46 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email']) &&
           ((resource.data.get('email', '') == '' && request.resource.data.email == myEmail()) ||
            (resource.data.get('email', '') == myEmail() && request.resource.data.email == ''))
+        ) || (
+          // Cada jugador puede guardar sus días fijos de «no puedo ir»
+          hasEmail() && resource.data.get('email', '') == myEmail() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diasNo', 'diasNota']) &&
+          request.resource.data.diasNo is list && request.resource.data.diasNo.size() <= 7
         );
       }
       match /tipos/{id}  { allow read: if signedIn(); allow write: if isAdminOf(e); }
       match /multas/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
+
+      // Planes (cenas, lotería…): los crean los administradores; cada uno vota y se apunta con su propia respuesta
+      match /planes/{p} {
+        allow read: if signedIn();
+        allow write: if isAdminOf(e);
+        match /respuestas/{who} {
+          allow read: if signedIn();
+          allow create, update: if hasEmail() && who == myEmail() &&
+            get(/databases/$(database)/documents/equipos/$(e)/planes/$(p)).data.get('cerrado', false) != true;
+          allow delete: if isAdminOf(e) || (hasEmail() && who == myEmail());
+        }
+        match /propuestas/{id} {
+          allow read: if signedIn();
+          allow create: if hasEmail() && request.resource.data.autor == myEmail() &&
+            request.resource.data.texto is string && request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 80 &&
+            get(/databases/$(database)/documents/equipos/$(e)/planes/$(p)).data.get('cerrado', false) != true;
+          allow delete: if isAdminOf(e) || (hasEmail() && resource.data.autor == myEmail());
+        }
+      }
+
+      // Scouting: la plantilla del rival la editan los administradores; notas, cualquiera con cuenta
+      match /rivales/{r} {
+        allow read: if signedIn();
+        allow write: if isAdminOf(e);
+        match /notas/{n} {
+          allow read: if signedIn();
+          allow create: if hasEmail() && request.resource.data.autor == myEmail() &&
+            request.resource.data.texto is string && request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 500;
+          allow delete: if isAdminOf(e) || (hasEmail() && resource.data.autor == myEmail());
+        }
+      }
 
       // Tablón de avisos: todos leen, solo los administradores escriben.
       match /avisos/{id} {

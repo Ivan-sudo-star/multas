@@ -8,6 +8,7 @@ Necesita la variable FIREBASE_SERVICE_ACCOUNT (el JSON de la cuenta de servicio)
 y, opcionalmente, APP_URL (la dirección de la app, terminada en /).
 """
 import json
+import math
 import os
 import sys
 from datetime import date, datetime, time, timedelta
@@ -116,6 +117,8 @@ def avisar_multas():
         total += avisar_eventos(team, toks)
         total += avisar_tablon(team, toks)
         total += avisar_viernes_equipo(team, toks)
+        total += avisar_planes(team, toks)
+        total += pagos_equipo(team, toks)
         nuevas = list(team.reference.collection("multas")
                       .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
         if not nuevas:
@@ -137,9 +140,6 @@ def avisar_equipo(nombre, multas, tokens):
         uid, jug = info.get("uid", ""), info.get("jugador", "")
         mias = [m for m in multas if jug and m.get("jugador") == jug]
         if info.get("solo_mias") and not mias:
-            continue
-        # A quien ha puesto las multas no se le avisa (salvo si son suyas)
-        if not mias and all(m.get("autor") == uid for m in multas):
             continue
         if mias:
             title = "💸 Te han puesto una multa" if len(mias) == 1 else f"💸 Te han puesto {len(mias)} multas"
@@ -482,6 +482,104 @@ def avisar_viernes_equipo(team, toks):
         send(toks_, "🎯 Tiro de medio campo", "Hoy es viernes: el último en meter paga 2 €.", {"tipo": "viernes"}, view="anadir")
     team.reference.update({"viernesEnviado": hoy})
     return 1
+
+
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+         "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def avisar_planes(team, toks):
+    """Planes nuevos (cenas, lotería…): a todo el equipo menos a quien lo creó."""
+    nuevos = list(team.reference.collection("planes")
+                  .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
+    for d in nuevos:
+        p = d.to_dict() or {}
+        body = (p.get("descripcion") or "").strip()
+        body = (body[:140] + " · " if body else "") + "Vota y apúntate en la app."
+        mensajes = [(tok, f"🎉 Nuevo plan: {p.get('titulo', '')}", body[:200])
+                    for tok, info in toks() if info.get("uid") != p.get("autor")]
+        send_each(mensajes, data={"tipo": "aviso"}, view="planes")
+        d.reference.update({"notificada": True})
+    return len(nuevos)
+
+
+def mes_cobro(fecha):
+    """Mes en que hay que pagar una multa: el suyo, salvo las de la última semana, que pasan al siguiente."""
+    d = date.fromisoformat(fecha) + timedelta(days=7)
+    return f"{d.year}-{d.month:02d}"
+
+
+def fin_mes(y, m):
+    return date(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)
+
+
+def deudas(team, filtro):
+    jugadores = {p.id: p.to_dict() or {} for p in team.reference.collection("jugadores").stream()}
+    por = {}
+    for d in team.reference.collection("multas").where(filter=firestore.FieldFilter("pagada", "==", False)).stream():
+        m = d.to_dict() or {}
+        if not m.get("fecha") or not filtro(m):
+            continue
+        pid = m.get("jugador", "")
+        nombre = jugadores.get(pid, {}).get("nombre") or m.get("jugadorNombre", "")
+        n, t = por.get(pid, (nombre, 0.0))
+        por[pid] = (n, t + float(m.get("importe") or 0))
+    return por
+
+
+def pagos_equipo(team, toks):
+    """Recordatorio de pago 7 días antes de fin de mes y recargo el día 1 a quien no haya pagado."""
+    t = team.to_dict() or {}
+    pg = t.get("pagos") or {}
+    if not pg.get("activo"):
+        return 0
+    pct = float(pg.get("pct") or 50)
+    minimo = float(pg.get("min") if pg.get("min") is not None else 1)
+    ahora = datetime.now(TZ)
+    hoy = ahora.date()
+    ym = f"{hoy.year}-{hoy.month:02d}"
+    fin = fin_mes(hoy.year, hoy.month)
+    hecho = 0
+
+    if hoy == fin - timedelta(days=7) and ahora.hour >= 18 and t.get("pagoAviso") != ym:
+        pend = deudas(team, lambda m: mes_cobro(m["fecha"]) <= ym)
+        cuando = f"{fin.day} de {MESES[fin.month - 1]}"
+        mensajes = []
+        propietario = str(t.get("propietario", "")).lower()
+        emails = {p.id: str((p.to_dict() or {}).get("email", "")).lower() for p in team.reference.collection("jugadores").stream()}
+        resumen = ", ".join(f"{nombre_corto(n)} {eur(v)}" for n, v in sorted(pend.values(), key=lambda x: -x[1]))
+        for tok, info in toks():
+            pid = info.get("jugador", "")
+            if pid in pend:
+                mensajes.append((tok, f"💶 Tienes {eur(pend[pid][1])} de multas sin pagar",
+                                 f"Págalas antes del {cuando}. Si no, se aplicará un recargo del {pct:g} % (mínimo {eur(minimo)})."))
+            if pend and propietario and emails.get(pid) == propietario:
+                total = sum(v for _, v in pend.values())
+                mensajes.append((tok, f"💶 Multas pendientes · {eur(total)}", resumen[:200]))
+        send_each(mensajes, data={"tipo": "aviso"}, view="resumen")
+        team.reference.update({"pagoAviso": ym})
+        hecho += 1
+
+    prev = hoy.replace(day=1) - timedelta(days=1)
+    pym = f"{prev.year}-{prev.month:02d}"
+    if hoy.day == 1 and ahora.hour >= 10 and t.get("recargoAplicado") != pym:
+        pend = deudas(team, lambda m: mes_cobro(m["fecha"]) == pym and m.get("tipo") != "recargo")
+        batch = db.batch()
+        for pid, (nombre, total) in pend.items():
+            if total <= 0:
+                continue
+            importe = max(minimo, math.ceil(total * pct / 100 * 2) / 2)
+            batch.set(team.reference.collection("multas").document(), {
+                "jugador": pid, "jugadorNombre": nombre, "tipo": "recargo",
+                "tipoNombre": f"Recargo {pct:g} % por no pagar ({MESES[prev.month - 1]})",
+                "unidad": "fijo", "precio": importe, "cantidad": 1, "importe": importe, "fecha": hoy.isoformat(),
+                "nota": f"Pendiente de {MESES[prev.month - 1]}: {eur(total)}", "pagada": False, "notificada": False,
+                "creado": int(ahora.timestamp() * 1000), "autor": "recargo"})
+        batch.update(team.reference, {"recargoAplicado": pym})
+        batch.commit()
+        print(f"::notice::Recargos aplicados: {len(pend)}")
+        hecho += 1
+    return hecho
 
 
 def avisar_viernes():
