@@ -239,6 +239,25 @@ def momento_recordatorio(start, horas, cierre=None):
     return rem
 
 
+def hora_txt(dt, hoy):
+    d = dt.date()
+    dia = "hoy" if d == hoy else "mañana" if d == hoy + timedelta(days=1) else f"el {DIAS[d.weekday()]} {d.day}"
+    return f"{dia} a las {dt:%H:%M}"
+
+
+def texto_plazo(c, cierre, tipo_multa, ahora):
+    """Texto del recordatorio según lo que haya contestado cada uno."""
+    multa = f" Si no contestas, multa de {eur(tipo_multa.get('precio'))}." if tipo_multa else ""
+    if cierre and ahora < cierre:
+        plazo = hora_txt(cierre, ahora.date())
+        if c == "si":
+            return f"Has dicho que vas ✅. Si cambias de idea, avísalo en la app. El plazo se cierra {plazo}."
+        return f"⚠️ Avisa en la app si vas o no. El plazo se cierra {plazo}.{multa}"
+    if c == "si":
+        return "Has dicho que vas ✅. Te esperamos."
+    return "¿Vas? Contesta en la app para que el entrenador sepa cuántos seréis."
+
+
 def cierre_de(ev, pl):
     if ev.get("cierre"):
         return datetime.fromtimestamp(ev["cierre"] / 1000, TZ)
@@ -303,18 +322,12 @@ def avisar_eventos(team, toks):
                 body = f"{que.capitalize()} {cuando(ev, hoy)}."
                 if (ev.get("serie") or 0) > 1:
                     body += f" Se repite cada semana ({ev['serie']} semanas)."
-                body += " ¿Vas? Contesta en la app."
+                body += " " + texto_plazo(c, cierre_de(ev, pl), tipo_multa, ahora)
             else:
                 if c == "no":
                     continue
                 title = f"⏰ {tipo.capitalize()} {cuando(ev, hoy)}"
-                body = "Te esperamos." if c == "si" else "¿Vas? Contesta en la app para que el entrenador sepa cuántos seréis."
-                cierre = cierre_de(ev, pl)
-                if c != "si" and cierre and ahora < cierre:
-                    body = f"Contesta antes de las {cierre:%H:%M} si vas o no"
-                    if tipo_multa:
-                        body += f", o multa de {eur(tipo_multa.get('precio'))}"
-                    body += "."
+                body = texto_plazo(c, cierre_de(ev, pl), tipo_multa, ahora)
                 if ev.get("nota"):
                     body = f"{ev['nota']}. {body}"
             mensajes.append((tok, title, body[:200]))
