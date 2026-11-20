@@ -12,6 +12,15 @@ service cloud.firestore {
       return hasEmail() &&
         myEmail() in getAfter(/databases/$(database)/documents/equipos/$(e)).data.admins;
     }
+    // El propietario no cambia nunca y siempre sigue siendo administrador.
+    // Un equipo antiguo sin propietario lo puede reclamar solo quien lo creó.
+    function ownerOk() {
+      let before = resource.data.get('propietario', '');
+      let after = request.resource.data.get('propietario', '');
+      return ((before == '' && (after == '' || (after == myEmail() && request.auth.uid == resource.data.get('creador', '')))) ||
+              (before != '' && after == before)) &&
+             (after == '' || after in request.resource.data.admins);
+    }
     function validTeam() {
       let d = request.resource.data;
       return d.nombre is string && d.nombre.size() > 0 && d.nombre.size() <= 60 &&
@@ -23,9 +32,11 @@ service cloud.firestore {
       // Con el código se puede ver el equipo; nadie puede listar todos los equipos.
       allow get: if signedIn();
       allow list: if false;
-      allow create: if hasEmail() && myEmail() in request.resource.data.admins && validTeam();
-      allow update: if isAdminOf(e) && validTeam() && myEmail() in resource.data.admins;
-      allow delete: if hasEmail() && myEmail() in resource.data.admins;
+      allow create: if hasEmail() && myEmail() in request.resource.data.admins && validTeam() &&
+                       request.resource.data.get('propietario', '') == myEmail();
+      allow update: if isAdminOf(e) && validTeam() && myEmail() in resource.data.admins && ownerOk();
+      allow delete: if hasEmail() && (resource.data.get('propietario', '') == myEmail() ||
+                       (resource.data.get('propietario', '') == '' && myEmail() in resource.data.admins));
 
       match /jugadores/{id} {
         allow read: if signedIn();

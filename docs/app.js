@@ -377,7 +377,14 @@ function renderAjustes(){
   $("#accountOut").innerHTML = e ? `<span><b>${esc(e)}</b><br><span class="note">${myPlayer()?"Eres "+esc(myPlayer().nombre)+" · ":"Sin vincular a ningún jugador · "}${S.canWrite?"Administrador: puedes apuntar y cobrar multas":"Puedes ver las multas"}</span></span><span class="row">${myPlayer()?'<button type="button" class="btn small ghost" id="unclaim">Desvincular</button>':""}<button type="button" class="btn small ghost" id="lOut">Salir</button></span>` : "";
   // administradores
   $("#adminCard").hidden = !S.canWrite;
-  $("#adminList").innerHTML = (S.aj.admins||[]).map(a=>`<div class="adm"><span>${esc(a)}</span>${String(a).toLowerCase()!==e?`<button type="button" class="btn small danger" data-admdel="${esc(a)}">Quitar</button>`:'<span class="note">tú</span>'}</div>`).join("");
+  const owner=String(S.aj.propietario||"").toLowerCase();
+  const admins=(S.aj.admins||[]).map(a=>String(a).toLowerCase());
+  const nameOf=a=>S.jug.find(p=>pkey(p)===a)?.nombre;
+  admins.sort((x,y)=>(y===owner)-(x===owner));
+  $("#adminList").innerHTML = admins.map(a=>`<div class="adm"><span>${nameOf(a)?"<b>"+esc(nameOf(a))+"</b><br>":""}${esc(a)}${a===e?' <span class="note">· tú</span>':""}</span>${a===owner?'<span class="pill paid">propietario</span>':`<button type="button" class="btn small danger" data-admdel="${esc(a)}">Quitar</button>`}</div>`).join("");
+  const cands=S.jug.filter(p=>p.activo!==false && p.email && !admins.includes(pkey(p))).sort(sortPlayers);
+  $("#adminCands").innerHTML = cands.length ? '<p class="note" style="margin:8px 0 0">Jugadores con cuenta:</p>'+cands.map(p=>`<div class="adm"><span><b>${esc(p.nombre)}</b><br>${esc(p.email)}</span><button type="button" class="btn small" data-admadd="${esc(pkey(p))}">Hacer admin</button></div>`).join("")
+    : '<p class="note" style="margin:8px 0 0">Cuando tus compañeros vinculen su cuenta («Soy yo»), aparecerán aquí para hacerlos administradores con un toque. También puedes añadir un correo abajo.</p>';
   // conteo
   $("#periodForm").querySelectorAll("input,button").forEach(i=>i.disabled=!S.canWrite);
   $("#typeForm").hidden=!S.canWrite;
@@ -534,7 +541,8 @@ document.addEventListener("click", e=>{
       if(!nombre||!(precio>=0)){ toast("Pon un nombre y un precio válido"); return; }
       run(()=>F.updateDoc(dref("tipos",id),{nombre,precio,unidad}),"Tipo de multa guardado"); return; }
   if(d.tdel){ armed(t,"¿Borrar? Toca otra vez",()=>run(()=>F.deleteDoc(dref("tipos",d.tdel)),"Tipo de multa borrado")); return; }
-  if(d.admdel){ armed(t,"¿Quitar? Toca otra vez",()=>run(()=>F.updateDoc(dref("ajustes","general"),{admins:F.arrayRemove(d.admdel)}),"Administrador quitado")); return; }
+  if(d.admadd){ run(()=>F.updateDoc(teamRef(),{admins:F.arrayUnion(d.admadd)}),"Ahora es administrador"); return; }
+  if(d.admdel){ if(String(d.admdel).toLowerCase()===String(S.aj.propietario||"").toLowerCase()){ toast("El propietario no se puede quitar"); return; } armed(t,"¿Quitar? Toca otra vez",()=>run(()=>F.updateDoc(dref("ajustes","general"),{admins:F.arrayRemove(d.admdel)}),"Administrador quitado")); return; }
 });
 $("#qty").addEventListener("input",updatePreview);
 $("#qtyMinus").addEventListener("click",()=>{ $("#qty").value=Math.max(1,getQty()-1); updatePreview(); });
@@ -663,6 +671,9 @@ function subscribe(){
     }
     S.aj=Object.assign({nombre:"",inicio:"",contador:"",admins:[],escudo:"",viernes:false}, s.data());
     rememberTeam(TEAM, S.aj.nombre);
+    if(!S.aj.propietario && S.aj.creador && S.user && S.user.uid===S.aj.creador && email() && !S.ownerClaimed){
+      S.ownerClaimed=true; F.updateDoc(teamRef(),{propietario:email()}).catch(e=>console.warn("propietario",e));
+    }
     if(!s.metadata.hasPendingWrites) ajFilled=false;
     computeWrite(); S.ready.a=true; done(s); renderAll(); }, fail));
   unsubs.push(F.onSnapshot(col("multas"), s=>{
@@ -732,7 +743,7 @@ async function createTeam(){
     let id=genCode();
     for(let i=0;i<5;i++){ const t=await F.getDoc(F.doc(db,"equipos",id)); if(!t.exists()) break; id=genCode(); }
     const b=F.writeBatch(db);
-    b.set(F.doc(db,"equipos",id),{nombre, admins:[email()], contador:$("#ctCount").value.trim(), inicio:"", viernes:false, escudo:"", creado:Date.now(), creador:S.user.uid});
+    b.set(F.doc(db,"equipos",id),{nombre, admins:[email()], contador:$("#ctCount").value.trim(), inicio:"", viernes:false, escudo:"", creado:Date.now(), creador:S.user.uid, propietario:email()});
     if($("#ctSample").checked) DEFAULT_TYPES.forEach(([n,precio,unidad],i)=>b.set(F.doc(db,"equipos",id,"tipos","t"+(i+1)),{nombre:n,precio,unidad,orden:i+1}));
     if(await run(()=>b.commit(),"Equipo creado: "+nombre)){ rememberTeam(id,nombre); location.hash="equipo"; openTeam(id); }
   } finally { btn.disabled=false; }
@@ -742,7 +753,7 @@ async function migrateLegacy(){
   try{
     const L=(await F.getDoc(F.doc(db,"ajustes","general"))).data()||{};
     let escudo=""; try{ const blob=await (await fetch("icons/escudo-128.png")).blob(); escudo=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob); }); }catch{}
-    const ok=await run(()=>F.setDoc(F.doc(db,"equipos",LEGACY_TEAM),{nombre:"Caixa Ontinyent", admins:L.admins||[email()], contador:L.contador||"", inicio:L.inicio||"", viernes:true, escudo, creado:Date.now(), creador:S.user.uid}));
+    const ok=await run(()=>F.setDoc(F.doc(db,"equipos",LEGACY_TEAM),{nombre:"Caixa Ontinyent", admins:L.admins||[email()], contador:L.contador||"", inicio:L.inicio||"", viernes:true, escudo, creado:Date.now(), creador:S.user.uid, propietario:email()}));
     if(!ok) return;
     for(const c of ["jugadores","tipos","multas"]){
       const snap=await F.getDocs(F.collection(db,c));
