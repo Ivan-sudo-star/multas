@@ -1,0 +1,248 @@
+<title>Manual de la app del Caixa Ontinyent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: guía de una columna con índice de chips arriba; cada sección es una "pista" con su color de rol (todos = azul, admin = naranja) */
+:root{
+  --bg:#f3f3f8; --surface:#ffffff; --ink:#17173d; --muted:#5d5d82; --line:#dcdcea;
+  --navy:#29297a; --orange:#e23a06; --orange-soft:#fde7de; --navy-soft:#e6e6f6; --ok:#1d7f48;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e0e21; --surface:#18183a; --ink:#ececfa; --muted:#a4a4c8; --line:#2c2c55;
+  --navy:#8f8ff0; --orange:#ff6a3a; --orange-soft:#3a1d14; --navy-soft:#22224a; --ok:#5bd08f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e0e21; --surface:#18183a; --ink:#ececfa; --muted:#a4a4c8; --line:#2c2c55;
+  --navy:#8f8ff0; --orange:#ff6a3a; --orange-soft:#3a1d14; --navy-soft:#22224a; --ok:#5bd08f; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.hero{background:#29297a;color:#fff;margin-top:calc(-1 * env(safe-area-inset-top,0px));padding-top:calc(env(safe-area-inset-top,0px) + 28px);padding-bottom:26px;border-bottom:5px solid #e23a06}
+.hero .wrap{padding-block:0}
+.hero small{font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.8}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,8vw,52px);line-height:1;margin:6px 0 10px;text-transform:uppercase;text-wrap:balance}
+.hero p{margin:0;max-width:56ch;opacity:.92}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 8px}
+nav.toc a{font-size:14px;font-weight:600;text-decoration:none;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+nav.toc a.adm{border-color:var(--orange);color:var(--orange)}
+h2{font-family:var(--display);font-weight:700;font-size:30px;text-transform:uppercase;letter-spacing:.02em;margin:40px 0 4px;text-wrap:balance}
+.role{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;border-radius:999px;padding:3px 9px;margin-top:28px}
+.role.all{background:var(--navy-soft);color:var(--navy)}
+.role.adm{background:var(--orange-soft);color:var(--orange)}
+section{scroll-margin-top:16px}
+h3{font-size:17px;margin:22px 0 6px}
+p{margin:8px 0;max-width:65ch}
+ol,ul{padding-left:22px;margin:8px 0}
+li{margin:4px 0}
+.path{font-weight:600;background:var(--navy-soft);color:var(--navy);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.tip{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:12px 0}
+.tip b:first-child{display:block;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.warn{border-color:var(--orange);background:var(--orange-soft)}
+.tbl{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums;background:var(--surface);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+.notif{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;max-width:420px;margin:10px 0}
+.notif i{flex:none;width:34px;height:34px;border-radius:8px;background:#29297a;display:grid;place-items:center;color:#fff;font-style:normal;font-weight:800;font-family:var(--display)}
+.notif b{display:block;font-size:14px}
+.notif span{font-size:13px;color:var(--muted)}
+footer{margin-top:40px;font-size:13px;color:var(--muted)}
+a{color:var(--navy)}
+:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+</style>
+
+<header class="hero"><div class="wrap">
+  <small>Caixa Ontinyent · Senior masculino autonómico</small>
+  <h1>Manual de la app del equipo</h1>
+  <p>Multas, asistencia a entrenos, planes del equipo y scouting de rivales, todo en el mismo sitio. Primero va lo que tiene que saber todo el mundo y después lo de los administradores.</p>
+</div></header>
+
+<main class="wrap">
+<nav class="toc" aria-label="Índice">
+  <a href="#empezar">Empezar</a><a href="#asistencia">Asistencia</a><a href="#dias">Días fijos</a><a href="#multas">Multas y pagos</a><a href="#planes">Planes</a><a href="#scouting">Scouting</a><a href="#avisos">Notificaciones</a>
+  <a class="adm" href="#admin-entrenos">Admin: entrenos</a><a class="adm" href="#admin-multas">Admin: multas</a><a class="adm" href="#admin-planes">Admin: planes</a><a class="adm" href="#admin-scouting">Admin: scouting y FBCV</a><a class="adm" href="#admin-ajustes">Admin: ajustes</a>
+</nav>
+
+<span class="role all">Para todos</span>
+<section id="empezar">
+  <h2>Empezar</h2>
+  <ol>
+    <li>Abre <b>https://ivan-sudo-star.github.io/multas/?e=ONTINYENT</b>.</li>
+    <li>Instálala. En iPhone, desde <b>Safari</b>: Compartir → <b>Añadir a pantalla de inicio</b>. En Android, desde <b>Chrome</b>: <b>Instalar</b>. A partir de ahí entra siempre desde el icono del escudo.</li>
+    <li><span class="path">Ajustes → Cuenta</span>: correo y contraseña → <b>Crear cuenta</b>. Si ya la tienes, <b>Entrar</b>.</li>
+    <li><span class="path">Resumen</span>: elige tu nombre → <b>Soy yo</b>. Sin este paso la app no sabe quién eres.</li>
+    <li><span class="path">Ajustes → Avisos</span> → <b>Activar notificaciones</b> → Permitir.</li>
+  </ol>
+  <p>La barra de abajo tiene seis secciones: Resumen, Historial, Asistencia, Multa (+), Planes y Ajustes.</p>
+</section>
+
+<section id="asistencia">
+  <h2>Asistencia</h2>
+  <p>En <span class="path">Asistencia</span> están los próximos entrenos y partidos, con fecha, hora y pabellón.</p>
+  <h3>Decir si vas</h3>
+  <ol>
+    <li>En cada entreno pulsa <b>Voy</b> o <b>No voy</b>.</li>
+    <li>Si quieres, escribe un comentario y pulsa <b>Guardar</b>: «solo a tirar», «llego a las 20:30»… Lo ve todo el equipo.</li>
+    <li>Puedes cambiar de idea las veces que quieras mientras el plazo esté abierto.</li>
+  </ol>
+  <h3>El plazo y la multa por no contestar</h3>
+  <p>Cada entreno muestra <b>«⏳ Contesta antes de…»</b>. Cuando se cierra el plazo, los botones se bloquean y a quien no haya contestado se le pone la multa automáticamente.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Entreno</th><th>Recordatorio</th><th>Último aviso</th><th>Cierre del plazo</th></tr></thead>
+    <tbody>
+      <tr><td>Martes 20:00</td><td>Martes 12:00</td><td>Martes 16:00</td><td>Martes 17:00</td></tr>
+      <tr><td>Martes 17:00</td><td>Martes 09:00</td><td>Martes 13:00</td><td>Martes 14:00</td></tr>
+      <tr><td>Martes 11:00 (mañana)</td><td>Lunes 17:00</td><td>Lunes 22:59</td><td>Lunes 23:59</td></tr>
+    </tbody>
+  </table></div>
+  <p>El recordatorio no le llega a quien ya ha dicho que no va. El último aviso solo le llega a quien todavía no ha contestado.</p>
+  <h3>Partidos</h3>
+  <p>En los partidos también puedes decir si vas. No tienen plazo ni multa. El botón <b>🔎 Scouting</b> abre la ficha del rival.</p>
+</section>
+
+<section id="dias">
+  <h2>Días que no puedes ir</h2>
+  <p>Si un día de la semana no puedes nunca, por ejemplo los miércoles por trabajo:</p>
+  <ol>
+    <li>En <span class="path">Asistencia → Días que no puedo ir</span> marca <b>Mié</b>.</li>
+    <li>Escribe el motivo, si quieres: «trabajo».</li>
+    <li>Pulsa <b>Guardar mis días</b>.</li>
+  </ol>
+  <p>Se pone <b>No voy</b> en todos los entrenos de ese día, los que ya existen y los que se creen después. No te llegan recordatorios ni multa por no contestar.</p>
+  <div class="tip"><b>Un miércoles sí puedes</b>Ve a ese entreno concreto y pulsa <b>Voy</b>. Solo cambia ese día: el motivo desaparece de ese entreno y los demás miércoles siguen en «No voy». Tiene que ser antes de que cierre el plazo.</div>
+  <p>Para quitar el día fijo, desmárcalo y pulsa <b>Guardar mis días</b>.</p>
+</section>
+
+<section id="multas">
+  <h2>Multas y pagos</h2>
+  <ul>
+    <li><span class="path">Resumen</span>: el bote, la clasificación y la tarjeta <b>Tus multas</b> con lo que debes.</li>
+    <li><span class="path">Historial</span>: todas las multas. Puedes filtrar por jugador y por cobradas o pendientes.</li>
+    <li>Las multas se pagan <b>en efectivo</b> a quien lleva el conteo, que las marca como cobradas.</li>
+  </ul>
+  <h3>Plazo de pago y recargo</h3>
+  <p>Cada multa se paga dentro de su mes. Las de la última semana del mes pasan al mes siguiente, para que siempre haya al menos 7 días.</p>
+  <ul>
+    <li><b>7 días antes de fin de mes</b>, a las 18:00, te llega un aviso con lo que debes.</li>
+    <li><b>El día 1</b>, si no has pagado, se añade una multa de <b>recargo del 50 %</b> de lo pendiente (mínimo 1 €, redondeado a 0,50 €). Si debes 8 €, son 4 € más.</li>
+    <li>Los recargos no generan más recargos.</li>
+  </ul>
+</section>
+
+<section id="planes">
+  <h2>Planes</h2>
+  <p>Cenas, lotería, quedadas… Están en la pestaña <span class="path">Planes</span> (la de la bandera). Cada plan puede tener varias encuestas y listas a la vez.</p>
+  <h3>Encuestas</h3>
+  <ul>
+    <li>Toca una opción para votarla y vuelve a tocarla para quitar el voto.</li>
+    <li>Debajo de cada encuesta pone si se puede elegir <b>una</b> o <b>varias</b>.</li>
+    <li>Si la encuesta lo permite, escribe tu idea en <b>Proponer otra opción</b> → <b>Añadir</b>. Todos la pueden votar.</li>
+    <li>Se ve quién ha votado cada opción.</li>
+  </ul>
+  <h3>Listas</h3>
+  <ul>
+    <li>Pulsa <b>Apuntarme</b>. Si la lista pide cantidad (décimos, invitados…), ponla antes.</li>
+    <li>Puedes añadir un comentario: alergias, «vengo con pareja»…</li>
+    <li>Para cambiar algo, edítalo y pulsa <b>Guardar</b>. Para salir, <b>Desapuntarme</b>.</li>
+  </ul>
+  <p>Cuando un administrador cierra el plan, ya no se puede votar ni apuntarse.</p>
+</section>
+
+<section id="scouting">
+  <h2>Scouting</h2>
+  <p>En <span class="path">Asistencia → 🔎 Scouting de rivales</span>, o con el botón 🔎 de cada partido, ves la plantilla del rival, que se ha copiado de la FBCV.</p>
+  <ul>
+    <li>Debajo de cada jugador puedes añadir una nota: «zurdo», «tira bien de 3», «defiende flojo»…</li>
+    <li>Arriba, en <b>Notas generales del equipo</b>: «defienden en zona 2-3», «juegan muy rápido»…</li>
+    <li>Las notas las ve todo el equipo. Puedes borrar las tuyas con ✕.</li>
+    <li>Si en la segunda vuelta repetís rival, las notas de la ida siguen ahí.</li>
+  </ul>
+</section>
+
+<section id="avisos">
+  <h2>Notificaciones</h2>
+  <p>Llegan al móvil aunque la app esté cerrada, como las de WhatsApp. Pueden tardar hasta 10 minutos.</p>
+  <div class="notif"><i>CO</i><div><b>⏰ Entreno hoy a las 20:00</b><span>⚠️ Avisa en la app si vas o no. El plazo se cierra hoy a las 17:00. Si no contestas, multa de 5 €.</span></div></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Aviso</th><th>Cuándo</th></tr></thead>
+    <tbody>
+      <tr><td>🏀 Entreno o partido nuevo</td><td>Al crearlo</td></tr>
+      <tr><td>⏰ Recordatorio</td><td>8 h antes, o la tarde anterior a las 17:00 si es por la mañana</td></tr>
+      <tr><td>⏳ Última hora</td><td>1 h antes del cierre, solo si no has contestado</td></tr>
+      <tr><td>💸 Multa</td><td>Cada vez que se pone una</td></tr>
+      <tr><td>📣 Aviso del tablón</td><td>Cuando un administrador escribe uno (salen arriba en Resumen)</td></tr>
+      <tr><td>🎉 Plan nuevo</td><td>Al crearlo</td></tr>
+      <tr><td>💶 Pago</td><td>7 días antes de fin de mes, si debes algo</td></tr>
+      <tr><td>🎯 Tiro de medio campo</td><td>Viernes por la tarde</td></tr>
+    </tbody>
+  </table></div>
+  <p>En <span class="path">Ajustes → Avisos</span> puedes marcar <b>Avisarme solo de mis multas</b> para no enterarte de las de los demás.</p>
+  <div class="tip warn"><b>Si no te llegan</b>Comprueba que entras desde el icono instalado y no desde el navegador. En iPhone hace falta iOS 16.4 o posterior. Prueba <b>Desactivar</b> y luego <b>Activar notificaciones</b> en Ajustes → Avisos.</div>
+</section>
+
+<span class="role adm">Para administradores</span>
+<section id="admin-entrenos">
+  <h2>Entrenos y partidos</h2>
+  <h3>Crear</h3>
+  <ol>
+    <li><span class="path">Asistencia → Nuevo entreno o partido</span>: tipo, fecha y hora. En los entrenos la hora es obligatoria.</li>
+    <li><b>Repetir cada semana</b> crea 4, 8, 12 o 20 semanas de golpe. Para martes y jueves, crea dos: uno empezando en martes y otro en jueves.</li>
+    <li>En los partidos, elige el <b>rival</b> para enlazar el scouting.</li>
+  </ol>
+  <h3>Pasar lista</h3>
+  <ol>
+    <li>En el entreno, pulsa <b>Pasar lista</b>.</li>
+    <li>Marca a cada uno: <b>Vino</b>, <b>Tarde</b>, <b>Justif.</b> o <b>Faltó</b>. <b>Marcar el resto como «vino»</b> va más rápido.</li>
+    <li><b>Multar</b> pone «Falta al entreno sin avisar» a quien faltó y «Tarde al entreno» a quien llegó tarde.</li>
+  </ol>
+  <p><b>Avisar a todos ahora</b> envía un recordatorio en el momento, también a ti. Al cerrarse el plazo, al entrenador y al propietario les llega el resumen: cuántos van, quién no y quién no ha contestado.</p>
+</section>
+
+<section id="admin-multas">
+  <h2>Multas</h2>
+  <ul>
+    <li>Botón <b>+</b> de la barra: elige la falta, uno o varios jugadores y cuántas veces.</li>
+    <li><span class="path">Historial</span>: <b>Cobrada</b> cuando te paguen; <b>Quitar</b> si fue un error.</li>
+    <li><span class="path">Resumen</span>: toca a un jugador → <b>Cobrar todo</b>.</li>
+    <li><b>Copiar resumen para WhatsApp</b> deja la clasificación lista para pegar en el grupo.</li>
+    <li>Escribe avisos en el tablón de <span class="path">Resumen → 📣 Avisos</span>; llegan como notificación a todos.</li>
+  </ul>
+</section>
+
+<section id="admin-planes">
+  <h2>Planes</h2>
+  <ol>
+    <li><span class="path">Planes → Nuevo plan</span>: título («Cena de Navidad»), descripción y fecha si la hay → <b>Crear plan</b>. Llega una notificación a todos.</li>
+    <li>En el plan, pulsa <b>+ Encuesta</b>. Los botones 📍 Lugar, 📅 Día y 🕘 Hora rellenan la pregunta. Escribe las opciones, una por línea. Puedes marcar <b>varias respuestas</b> y <b>cualquiera puede proponer opciones</b>.</li>
+    <li>Pulsa <b>+ Lista</b> para que la gente se apunte. Activa <b>Pedir cantidad</b> para cosas como la lotería y escribe qué se cuenta («décimos»).</li>
+    <li>Añade todas las encuestas y listas que quieras. <b>Cerrar</b> congela el plan; <b>Reabrir</b> lo vuelve a abrir.</li>
+  </ol>
+</section>
+
+<section id="admin-scouting">
+  <h2>Scouting y calendario de la FBCV</h2>
+  <ol>
+    <li>Ve a <span class="path">Asistencia → 🔎 Scouting de rivales</span>.</li>
+    <li>Pulsa <b>📥 Importar calendario y plantillas de la FBCV</b>. Se crean los partidos que quedan, con hora, pabellón y si es en casa o fuera, y los 13 rivales con su plantilla. Si lo pulsas otra vez, no duplica nada.</li>
+    <li>En cada rival puedes añadir el dorsal y la posición de un jugador, o jugadores nuevos, y quitar los que no jueguen.</li>
+  </ol>
+  <div class="tip"><b>Importante</b>Los datos de la FBCV se copiaron el 20 de noviembre de 2026. Si la federación cambia una hora o una fecha (los partidos con la marca «Cambios»), corrígelo a mano en el partido, o pide que se vuelvan a copiar.</div>
+</section>
+
+<section id="admin-ajustes">
+  <h2>Ajustes</h2>
+  <ul>
+    <li><b>Tu equipo</b>: enlace para invitar, <b>Copiar invitación para WhatsApp</b>, nombre, escudo y <b>👥 Plantilla del equipo</b> (añadir, renombrar, asignar correo o quitar jugadores).</li>
+    <li><b>Administradores</b>: <b>Hacer admin</b> a cualquier jugador con cuenta, o por correo. El <b>propietario</b> no se puede quitar nunca.</li>
+    <li><b>Plazo de asistencia</b>: activar, horas de recordatorio y de cierre, y qué multa se pone. <b>Guardar plazo</b> lo aplica también a los entrenos ya creados.</li>
+    <li><b>Pago de multas</b>: activar el recordatorio y el recargo y elegir el porcentaje. El recomendado es 50 % con un mínimo de 1 €.</li>
+    <li><b>Conteo</b>: desde qué mes cuentan las multas y quién lleva el conteo.</li>
+    <li><b>Tipos de multa</b>: cambiar precios, añadir o quitar faltas.</li>
+  </ul>
+</section>
+
+<footer>App gratuita del Caixa Ontinyent. Funciona en iPhone, Android y ordenador. Si algo no va, avisa al propietario del equipo.</footer>
+</main>
