@@ -203,6 +203,7 @@ TZ = ZoneInfo("Europe/Madrid")
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 TIPO = {"entreno": "entreno", "partido": "partido"}
 RECORDAR_ANTES = 8  # horas, si el equipo no ha configurado otra cosa
+MANANA_HASTA = 14   # los que empiezan antes de esta hora se avisan la noche anterior
 
 
 def plazo_cfg(team_data):
@@ -221,6 +222,9 @@ def inicio(ev):
 def momento_recordatorio(start, horas, cierre=None):
     """Nunca de madrugada y siempre al menos 1 h antes del cierre del plazo (o del inicio):
     si toca entre las 23:00 y las 8:00, se pasa a las 8:00 o, si no da tiempo, a las 21:00 del día antes."""
+    # Entrenos de mañana (antes de las 14:00): se avisa el día anterior a las 21:00
+    if start.hour < MANANA_HASTA:
+        return datetime.combine(start.date() - timedelta(days=1), time(21, 0), TZ)
     limite = (cierre or start) - timedelta(hours=1)
     rem = min(start - timedelta(hours=horas), limite)
     if rem.hour >= 23:
