@@ -298,6 +298,7 @@ def avisar_eventos(team, toks):
             ultima[d.id] = d
     if cerrar:
         multar_sin_respuesta(team, pl, cerrar)
+        resumen_entrenador(team, cerrar, toks, ahora)
     if ultima:
         avisar_ultima_hora(team, pl, ultima, toks, ahora)
     if not (nuevos or pedidos or recordar):
@@ -384,6 +385,47 @@ def avisar_ultima_hora(team, pl, eventos, toks, ahora):
                 body += f" Si no contestas, multa de {eur(tipo_multa.get('precio'))}."
             mensajes.append((tok, title, body[:200]))
         d.reference.update({"ultimaHora": True})
+    send_each(mensajes, data={"tipo": "evento"}, view="asistencia")
+
+
+def nombre_corto(nombre):
+    """«IVAN CAMBRA» → «Ivan C.»"""
+    partes = str(nombre or "?").split()
+    corto = partes[0].capitalize()
+    return corto + (f" {partes[1][0].upper()}." if len(partes) > 1 else "")
+
+
+def resumen_entrenador(team, eventos, toks, ahora):
+    """Al cerrarse el plazo: quién va, quién no y quién no ha contestado, solo para los entrenadores."""
+    jugadores = {p.id: p.to_dict() or {} for p in team.reference.collection("jugadores").stream()}
+    entrenadores = {pid for pid, p in jugadores.items() if p.get("rol") == "entrenador" and p.get("activo") is not False}
+    tokens = [(tok, info) for tok, info in toks() if info.get("jugador") in entrenadores]
+    if not tokens:
+        print("::notice::Resumen de asistencia: ningún entrenador con notificaciones activadas")
+        return
+    mensajes = []
+    for evid, d in eventos.items():
+        ev = d.to_dict() or {}
+        confirma, notas = ev.get("confirma") or {}, ev.get("notas") or {}
+        van, no, sin = [], [], []
+        for pid, p in sorted(jugadores.items(), key=lambda x: str(x[1].get("nombre", ""))):
+            if p.get("activo") is False or pid in entrenadores:
+                continue
+            email = str(p.get("email", "")).lower()
+            c = confirma.get(email) if email else None
+            (van if c == "si" else no if c == "no" else sin).append(nombre_corto(p.get("nombre")))
+        tipo = TIPO.get(ev.get("tipo"), "evento")
+        title = f"📋 {tipo.capitalize()} {cuando(ev, ahora.date())} · plazo cerrado"
+        partes = [f"✅ {len(van)} van: {', '.join(van)}" if van else "✅ Nadie ha dicho que va"]
+        if no:
+            partes.append(f"❌ {len(no)} no: {', '.join(no)}")
+        if sin:
+            partes.append(f"❓ {len(sin)} sin contestar: {', '.join(sin)}")
+        n_notas = sum(1 for v in notas.values() if v)
+        if n_notas:
+            partes.append(f"📝 {n_notas} comentario{'s' if n_notas > 1 else ''} en la app")
+        body = "\n".join(partes)
+        mensajes += [(tok, title, body[:400]) for tok, _ in tokens]
     send_each(mensajes, data={"tipo": "evento"}, view="asistencia")
 
 
