@@ -964,6 +964,7 @@ $("#planForm").addEventListener("submit",e=>{
 let rivUnsub=null;
 function openRival(id){
   if(S.rivalOpen===id && rivUnsub) return;
+  S.dorsalMode=false; S.rjEdit=null;
   if(rivUnsub){ rivUnsub(); rivUnsub=null; }
   S.rivalOpen=id; S.rivNotas=[];
   if(id) rivUnsub=F.onSnapshot(F.collection(db,"equipos",TEAM,"rivales",id,"notas"),s=>{ S.rivNotas=s.docs.map(d=>({id:d.id,...d.data()})); renderScouting(); },e=>console.warn(e));
@@ -994,9 +995,16 @@ function renderScouting(){
   let h=`<div class="card"><div class="who-line"><h3>${esc(r.nombre)}</h3>${S.canWrite?`<button type="button" class="btn small danger" data-rivdel="${esc(r.id)}">Borrar rival</button>`:""}</div>
     ${partidos.length?`<span class="note">Partidos: ${partidos.map(p=>esc(dayName(p.fecha))).join(" · ")}</span>`:""}
     <h4 style="margin:4px 0 0">Notas generales del equipo</h4>${notasDe("").map(notaHtml).join("")||'<span class="mini">Sin notas todavía.</span>'}${addNota("")}</div>`;
-  h+=`<h3>Plantilla (${plantilla.length})</h3>`;
+  h+=`<div class="who-line"><h3>Plantilla (${plantilla.length})</h3>${S.canWrite&&plantilla.length?`<button type="button" class="btn small ${S.dorsalMode?"":"ghost"}" id="dorMode">${S.dorsalMode?"Cancelar":"🔢 Poner dorsales"}</button>`:""}</div>`;
+  if(S.dorsalMode){
+    h+=`<div class="card"><p class="note">Escribe el dorsal de cada jugador (déjalo vacío si no lo sabes) y pulsa Guardar.</p>`+
+      plantilla.map(j=>`<div class="inl"><input type="number" class="dorin" id="dn-${esc(j.id)}" min="0" max="99" value="${j.dorsal??""}" aria-label="Dorsal de ${esc(j.nombre)}"><b style="flex:1">${esc(j.nombre)}</b></div>`).join("")+
+      `<button type="button" class="btn" id="dorSave">Guardar dorsales</button></div>`;
+    box.innerHTML=h; return;
+  }
   if(S.canWrite) h+=`<div class="card"><div class="inl"><input type="number" id="rj-dorsal" min="0" max="99" placeholder="Nº" aria-label="Dorsal"><input type="text" id="rj-nombre" maxlength="50" placeholder="Nombre del jugador"><input type="text" id="rj-pos" maxlength="20" placeholder="Posición (opcional)" style="flex:0 1 140px"><button type="button" class="btn small" id="rjAdd">Añadir jugador</button></div></div>`;
-  h+=plantilla.map(j=>`<div class="rj"><div class="who-line"><span class="row" style="gap:8px;flex-wrap:nowrap"><span class="dor">${esc(j.dorsal??"–")}</span><span><b>${esc(j.nombre)}</b>${j.pos?`<br><span class="mini">${esc(j.pos)}</span>`:""}</span></span>${S.canWrite?`<button type="button" class="btn small ghost" data-rjdel="${esc(j.id)}">Quitar</button>`:""}</div>
+  h+=plantilla.map(j=>`<div class="rj"><div class="who-line"><span class="row" style="gap:8px;flex-wrap:nowrap"><span class="dor">${esc(j.dorsal??"–")}</span><span><b>${esc(j.nombre)}</b>${j.pos?`<br><span class="mini">${esc(j.pos)}</span>`:""}</span></span>${S.canWrite?`<span class="row"><button type="button" class="btn small ghost" data-rjedit="${esc(j.id)}" aria-label="Editar">✏️</button><button type="button" class="btn small ghost" data-rjdel="${esc(j.id)}">Quitar</button></span>`:""}</div>
+    ${S.rjEdit===j.id?`<div class="inl"><input type="number" class="dorin" id="re-d" min="0" max="99" value="${j.dorsal??""}" placeholder="Nº" aria-label="Dorsal"><input type="text" id="re-n" maxlength="50" value="${esc(j.nombre)}" aria-label="Nombre"><input type="text" id="re-p" maxlength="20" value="${esc(j.pos||"")}" placeholder="Posición" aria-label="Posición" style="flex:0 1 120px"><button type="button" class="btn small" data-rjsave="${esc(j.id)}">Guardar</button></div>`:""}
     ${notasDe(j.id).map(notaHtml).join("")}${addNota(j.id)}</div>`).join("") || '<p class="note">Todavía no hay jugadores en la plantilla.</p>';
   box.innerHTML=h;
 }
@@ -1007,6 +1015,21 @@ function handleScoutClick(t,d){
     run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas"),{jugador:pid, texto:v.slice(0,500), autor:email(), nombre:myName(), creado:Date.now()}),"Nota añadida"); return true; }
   if(d.notadel){ run(()=>F.deleteDoc(F.doc(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas",d.notadel)),"Nota borrada"); return true; }
   if(t.id==="fbcvBtn"){ importFBCV(); return true; }
+  if(t.id==="dorMode"){ S.dorsalMode=!S.dorsalMode; S.rjEdit=null; renderScouting(); return true; }
+  if(t.id==="dorSave"){
+    const r=S.rivales.find(x=>x.id===S.rivalOpen); if(!r) return true;
+    const args=[]; Object.entries(r.plantilla||{}).forEach(([id,j])=>{ const i=document.getElementById("dn-"+id); if(!i) return;
+      const v=i.value===""?null:Math.max(0,Math.min(99,Math.round(+i.value))); if(v!==(j.dorsal??null)) args.push(new F.FieldPath("plantilla",id,"dorsal"), v); });
+    if(!args.length){ S.dorsalMode=false; renderScouting(); toast("No había cambios"); return true; }
+    document.activeElement?.blur();
+    run(()=>F.updateDoc(F.doc(col("rivales"),S.rivalOpen), ...args), "Dorsales guardados").then(ok=>{ if(ok){ S.dorsalMode=false; renderScouting(); } });
+    return true; }
+  if(d.rjedit){ S.rjEdit = S.rjEdit===d.rjedit ? null : d.rjedit; renderScouting(); return true; }
+  if(d.rjsave){ const nombre=$("#re-n").value.trim().toUpperCase(); if(!nombre){ toast("Escribe el nombre"); return true; }
+    const dorsal=$("#re-d").value===""?null:Math.max(0,Math.min(99,Math.round(+$("#re-d").value)));
+    document.activeElement?.blur();
+    run(()=>F.updateDoc(F.doc(col("rivales"),S.rivalOpen), new F.FieldPath("plantilla",d.rjsave), {nombre, dorsal, pos:$("#re-p").value.trim()}),"Jugador actualizado").then(ok=>{ if(ok){ S.rjEdit=null; renderScouting(); } });
+    return true; }
   if(t.id==="rjAdd"){ const nombre=$("#rj-nombre").value.trim().toUpperCase(); if(!nombre){ toast("Escribe el nombre"); return true; }
     const dorsal=$("#rj-dorsal").value===""?null:+$("#rj-dorsal").value;
     run(()=>F.updateDoc(F.doc(col("rivales"),S.rivalOpen), new F.FieldPath("plantilla",uid6()), {nombre, dorsal, pos:$("#rj-pos").value.trim()}),"Jugador añadido")
