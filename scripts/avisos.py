@@ -280,7 +280,7 @@ def avisar_eventos(team, toks):
     pedidos = {d.id: d for d in ref.where(filter=F("avisar", "==", True)).stream()}
     tdata = team.to_dict() or {}
     pl = plazo_cfg(tdata)
-    recordar, cerrar = {}, {}
+    recordar, cerrar, ultima = {}, {}, {}
     proximos = ref.where(filter=F("fecha", "in", [hoy.isoformat(), (hoy + timedelta(days=1)).isoformat()])).stream()
     for d in proximos:
         ev = d.to_dict() or {}
@@ -294,10 +294,14 @@ def avisar_eventos(team, toks):
         c = cierre_de(ev, pl)
         if c and not ev.get("plazoCerrado") and c <= ahora <= c + timedelta(hours=12):
             cerrar[d.id] = d
+        if c and not ev.get("ultimaHora") and c - ULTIMA_HORA <= ahora < c:
+            ultima[d.id] = d
     if cerrar:
         multar_sin_respuesta(team, pl, cerrar)
+    if ultima:
+        avisar_ultima_hora(team, pl, ultima, toks, ahora)
     if not (nuevos or pedidos or recordar):
-        return len(cerrar)
+        return len(cerrar) + len(ultima)
 
     nombre = tdata.get("nombre", "")
     tipo_multa = None
@@ -348,6 +352,39 @@ def avisar_eventos(team, toks):
         batch.update(r, upd)
     batch.commit()
     return len(cambios)
+
+
+ULTIMA_HORA = timedelta(hours=1)
+
+
+def avisar_ultima_hora(team, pl, eventos, toks, ahora):
+    """1 h antes del cierre: solo a los jugadores con cuenta que aún no han dicho si van."""
+    jugadores = {p.id: p.to_dict() or {} for p in team.reference.collection("jugadores").stream()}
+    tipo_multa = None
+    if pl["activo"] and pl["tipo"]:
+        t = team.reference.collection("tipos").document(pl["tipo"]).get()
+        tipo_multa = t.to_dict() if t.exists else None
+    tokens = toks()
+    mensajes = []
+    for evid, d in eventos.items():
+        ev = d.to_dict() or {}
+        tipo = TIPO.get(ev.get("tipo"), "evento")
+        cierre = cierre_de(ev, pl)
+        confirma = ev.get("confirma") or {}
+        for tok, info in tokens:
+            p = jugadores.get(info.get("jugador", ""))
+            if not p or p.get("activo") is False or p.get("rol") == "entrenador":
+                continue
+            email = str(p.get("email", "")).lower()
+            if not email or confirma.get(email) in ("si", "no"):
+                continue
+            title = f"⏳ Última hora: {tipo} {cuando(ev, ahora.date())}"
+            body = f"Aún no has avisado si vas. El plazo se cierra {hora_txt(cierre, ahora.date())}."
+            if tipo_multa:
+                body += f" Si no contestas, multa de {eur(tipo_multa.get('precio'))}."
+            mensajes.append((tok, title, body[:200]))
+        d.reference.update({"ultimaHora": True})
+    send_each(mensajes, data={"tipo": "evento"}, view="asistencia")
 
 
 def multar_sin_respuesta(team, pl, eventos):
