@@ -643,9 +643,14 @@ $("#tcFri").addEventListener("change",e=>run(()=>F.updateDoc(teamRef(),{viernes:
 $("#tcFile").addEventListener("change",e=>{ const f=e.target.files?.[0]; if(f) setCrest(f); e.target.value=""; });
 $("#pagoForm").addEventListener("submit",e=>{
   e.preventDefault();
-  run(()=>F.updateDoc(teamRef(),{pagos:{activo:$("#pgActivo").checked, pct:+$("#pgPct").value, min:+$("#pgMin").value}}),"Pago de multas guardado").then(()=>document.activeElement?.blur());
+  const pct=Math.round(+$("#pgPct").value), min=+$("#pgMin").value, fijo=+$("#pgFijo").value, tipo=$("#pgTipo").value;
+  if(tipo==="pct" && !(pct>=1 && pct<=500)){ toast("Pon un porcentaje entre 1 y 500"); return; }
+  if(tipo==="pct" && !(min>=0 && min<=100)){ toast("Pon un mínimo entre 0 y 100 €"); return; }
+  if(tipo==="fijo" && !(fijo>=0.5 && fijo<=100)){ toast("Pon un recargo entre 0,50 y 100 €"); return; }
+  run(()=>F.updateDoc(teamRef(),{pagos:{activo:$("#pgActivo").checked, tipo, pct:pct||50, min:isNaN(min)?1:min, fijo:fijo||2}}),"Pago de multas guardado").then(()=>document.activeElement?.blur());
 });
 $("#evTipo").addEventListener("change",()=>renderAsis());
+["pgTipo","pgPct","pgMin","pgFijo"].forEach(id=>$("#"+id).addEventListener("input",pagoEjemplo));
 $("#avText").addEventListener("input",()=>{ $("#avLeft").textContent=300-$("#avText").value.length; });
 $("#avForm").addEventListener("submit",e=>{
   e.preventDefault();
@@ -795,7 +800,9 @@ async function saveDias(){
 }
 
 /* ---------- pago de multas ---------- */
-const pagosCfg = () => { const p=S.aj.pagos||{}; return {activo:!!p.activo, pct:+p.pct||50, min:(p.min===undefined?1:+p.min)}; };
+const pagosCfg = () => { const p=S.aj.pagos||{}; return {activo:!!p.activo, tipo:p.tipo==="fijo"?"fijo":"pct", pct:+p.pct||50, min:(p.min===undefined?1:+p.min), fijo:+p.fijo||2}; };
+const recargoDe = (pg,deuda) => pg.tipo==="fijo" ? pg.fijo : Math.max(pg.min, Math.ceil(deuda*pg.pct/100*2)/2);
+const recargoTxt = pg => pg.tipo==="fijo" ? `un recargo de ${eur(pg.fijo)}` : `un recargo del ${pg.pct} %`;
 // Mes en que hay que pagar una multa: el de la multa, salvo las de la última semana, que pasan al siguiente
 function mesCobro(fecha){ const d=new Date((fecha||today())+"T12:00"); d.setDate(d.getDate()+7); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
 function finDeMes(ym){ const [y,m]=ym.split("-").map(Number); return new Date(y,m,0); }
@@ -807,13 +814,20 @@ function pagoAviso(me){
   const ahora=pend.filter(m=>mesCobro(m.fecha)<=ym); const tot=ahora.reduce((a,m)=>a+(+m.importe||0),0);
   if(!tot) return `<p class="note">💶 Tienes multas del final de mes: se pagan el mes que viene.</p>`;
   const fin=finDeMes(ym).toLocaleDateString("es-ES",{day:"numeric",month:"long"});
-  return `<p class="note" style="color:var(--orange);font-weight:600">💶 Paga ${eur(tot)} antes del ${esc(fin)} o se aplicará un recargo del ${pg.pct} %.</p>`;
+  return `<p class="note" style="color:var(--orange);font-weight:600">💶 Paga ${eur(tot)} antes del ${esc(fin)} o se aplicará ${recargoTxt(pg)} (${eur(recargoDe(pg,tot))}).</p>`;
 }
 function renderPagoCfg(){
   const pg=pagosCfg();
-  $("#pgSummary").textContent = pg.activo ? `Activado: recordatorio una semana antes de fin de mes y recargo del ${pg.pct} % (mínimo ${eur(pg.min)}) el día 1 a quien no haya pagado.` : "Desactivado: no hay recordatorio de pago ni recargo.";
+  $("#pgSummary").textContent = pg.activo ? `Activado: recordatorio una semana antes de fin de mes y, el día 1, ${pg.tipo==="fijo"?recargoTxt(pg):recargoTxt(pg)+" (mínimo "+eur(pg.min)+")"} a quien no haya pagado.` : "Desactivado: no hay recordatorio de pago ni recargo.";
   $("#pgEdit").hidden=!S.canWrite;
-  if(S.canWrite && !$("#pagoForm").contains(document.activeElement)){ $("#pgActivo").checked=pg.activo; $("#pgPct").value=String(pg.pct); $("#pgMin").value=String(pg.min); }
+  if(S.canWrite && !$("#pagoForm").contains(document.activeElement)){ $("#pgActivo").checked=pg.activo; $("#pgTipo").value=pg.tipo; $("#pgPct").value=String(pg.pct); $("#pgMin").value=String(pg.min); $("#pgFijo").value=String(pg.fijo); }
+  pagoEjemplo();
+}
+function pagoEjemplo(){
+  const fijo=$("#pgTipo").value==="fijo";
+  $("#pgPctRow").hidden=fijo; $("#pgFijoRow").hidden=!fijo;
+  const pg={tipo:fijo?"fijo":"pct", pct:Math.max(1,+$("#pgPct").value||50), min:Math.max(0,+$("#pgMin").value||0), fijo:Math.max(0.5,+$("#pgFijo").value||2)};
+  $("#pgEjemplo").textContent = "Ejemplo: "+[3,8,15].map(d=>`debe ${eur(d)} → recargo ${eur(recargoDe(pg,d))}`).join(" · ");
 }
 
 /* ---------- planes: encuestas y listas ---------- */

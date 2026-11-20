@@ -536,6 +536,9 @@ def pagos_equipo(team, toks):
         return 0
     pct = float(pg.get("pct") or 50)
     minimo = float(pg.get("min") if pg.get("min") is not None else 1)
+    fijo = pg.get("tipo") == "fijo"
+    cant_fija = float(pg.get("fijo") or 2)
+    texto_recargo = f"un recargo de {eur(cant_fija)}" if fijo else f"un recargo del {pct:g} % (mínimo {eur(minimo)})"
     ahora = datetime.now(TZ)
     hoy = ahora.date()
     ym = f"{hoy.year}-{hoy.month:02d}"
@@ -553,7 +556,7 @@ def pagos_equipo(team, toks):
             pid = info.get("jugador", "")
             if pid in pend:
                 mensajes.append((tok, f"💶 Tienes {eur(pend[pid][1])} de multas sin pagar",
-                                 f"Págalas antes del {cuando}. Si no, se aplicará un recargo del {pct:g} % (mínimo {eur(minimo)})."))
+                                 f"Págalas antes del {cuando}. Si no, se aplicará {texto_recargo}."))
             if pend and propietario and emails.get(pid) == propietario:
                 total = sum(v for _, v in pend.values())
                 mensajes.append((tok, f"💶 Multas pendientes · {eur(total)}", resumen[:200]))
@@ -569,10 +572,11 @@ def pagos_equipo(team, toks):
         for pid, (nombre, total) in pend.items():
             if total <= 0:
                 continue
-            importe = max(minimo, math.ceil(total * pct / 100 * 2) / 2)
+            importe = cant_fija if fijo else max(minimo, math.ceil(total * pct / 100 * 2) / 2)
             batch.set(team.reference.collection("multas").document(), {
                 "jugador": pid, "jugadorNombre": nombre, "tipo": "recargo",
-                "tipoNombre": f"Recargo {pct:g} % por no pagar ({MESES[prev.month - 1]})",
+                "tipoNombre": (f"Recargo por no pagar ({MESES[prev.month - 1]})" if fijo
+                               else f"Recargo {pct:g} % por no pagar ({MESES[prev.month - 1]})"),
                 "unidad": "fijo", "precio": importe, "cantidad": 1, "importe": importe, "fecha": hoy.isoformat(),
                 "nota": f"Pendiente de {MESES[prev.month - 1]}: {eur(total)}", "pagada": False, "notificada": False,
                 "creado": int(ahora.timestamp() * 1000), "autor": "recargo"})
