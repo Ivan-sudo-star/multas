@@ -202,7 +202,41 @@ def avisar_tablon(team, toks):
 TZ = ZoneInfo("Europe/Madrid")
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 TIPO = {"entreno": "entreno", "partido": "partido"}
-RECORDAR_ANTES = timedelta(hours=3)
+RECORDAR_ANTES = 8  # horas, si el equipo no ha configurado otra cosa
+
+
+def plazo_cfg(team_data):
+    p = team_data.get("plazo") or {}
+    return {"activo": bool(p.get("activo")), "aviso": float(p.get("aviso") or RECORDAR_ANTES),
+            "cierre": float(p.get("cierre") if p.get("cierre") is not None else 3), "tipo": p.get("tipo") or ""}
+
+
+def inicio(ev):
+    if not ev.get("hora"):
+        return None
+    h, m = (int(x) for x in ev["hora"].split(":")[:2])
+    return datetime.combine(date.fromisoformat(ev["fecha"]), time(h, m), TZ)
+
+
+def momento_recordatorio(start, horas, cierre=None):
+    """Nunca de madrugada y siempre al menos 1 h antes del cierre del plazo (o del inicio):
+    si toca entre las 23:00 y las 8:00, se pasa a las 8:00 o, si no da tiempo, a las 21:00 del día antes."""
+    limite = (cierre or start) - timedelta(hours=1)
+    rem = min(start - timedelta(hours=horas), limite)
+    if rem.hour >= 23:
+        return rem.replace(hour=21, minute=0)
+    if rem.hour < 8:
+        a_las_8 = rem.replace(hour=8, minute=0)
+        if a_las_8 <= limite:
+            return a_las_8
+        return datetime.combine(rem.date() - timedelta(days=1), time(21, 0), TZ)
+    return rem
+
+
+def cierre_de(ev, pl):
+    if ev.get("cierre"):
+        return datetime.fromtimestamp(ev["cierre"] / 1000, TZ)
+    return None
 
 
 def cuando(ev, hoy):
@@ -219,22 +253,32 @@ def avisar_eventos(team, toks):
     F = firestore.FieldFilter
     nuevos = {d.id: d for d in ref.where(filter=F("notificada", "==", False)).stream()}
     pedidos = {d.id: d for d in ref.where(filter=F("avisar", "==", True)).stream()}
-    recordar = {}
-    for d in ref.where(filter=F("fecha", "==", hoy.isoformat())).stream():
+    tdata = team.to_dict() or {}
+    pl = plazo_cfg(tdata)
+    recordar, cerrar = {}, {}
+    proximos = ref.where(filter=F("fecha", "in", [hoy.isoformat(), (hoy + timedelta(days=1)).isoformat()])).stream()
+    for d in proximos:
         ev = d.to_dict() or {}
-        if ev.get("recordado"):
-            continue
-        if ev.get("hora"):
-            h, m = (int(x) for x in ev["hora"].split(":")[:2])
-            empieza = datetime.combine(hoy, time(h, m), TZ)
-            if empieza - RECORDAR_ANTES <= ahora <= empieza + timedelta(hours=1):
+        start = inicio(ev)
+        if not ev.get("recordado"):
+            if start:
+                if momento_recordatorio(start, pl["aviso"], cierre_de(ev, pl)) <= ahora <= start + timedelta(hours=1):
+                    recordar[d.id] = d
+            elif ev["fecha"] == hoy.isoformat() and ahora.hour >= 10:
                 recordar[d.id] = d
-        elif ahora.hour >= 10:
-            recordar[d.id] = d
+        c = cierre_de(ev, pl)
+        if c and not ev.get("plazoCerrado") and c <= ahora <= c + timedelta(hours=12):
+            cerrar[d.id] = d
+    if cerrar:
+        multar_sin_respuesta(team, pl, cerrar)
     if not (nuevos or pedidos or recordar):
-        return 0
+        return len(cerrar)
 
-    nombre = (team.to_dict() or {}).get("nombre", "")
+    nombre = tdata.get("nombre", "")
+    tipo_multa = None
+    if pl["activo"] and pl["tipo"]:
+        t = team.reference.collection("tipos").document(pl["tipo"]).get()
+        tipo_multa = t.to_dict() if t.exists else None
     emails = {p.id: str((p.to_dict() or {}).get("email", "")).lower() for p in team.reference.collection("jugadores").stream()}
     tokens = toks()
     mensajes, cambios = [], {}
@@ -259,6 +303,12 @@ def avisar_eventos(team, toks):
                     continue
                 title = f"⏰ {tipo.capitalize()} {cuando(ev, hoy)}"
                 body = "Te esperamos." if c == "si" else "¿Vas? Contesta en la app para que el entrenador sepa cuántos seréis."
+                cierre = cierre_de(ev, pl)
+                if c != "si" and cierre and ahora < cierre:
+                    body = f"Contesta antes de las {cierre:%H:%M} si vas o no"
+                    if tipo_multa:
+                        body += f", o multa de {eur(tipo_multa.get('precio'))}"
+                    body += "."
                 if ev.get("nota"):
                     body = f"{ev['nota']}. {body}"
             mensajes.append((tok, title, body[:200]))
@@ -279,6 +329,42 @@ def avisar_eventos(team, toks):
         batch.update(r, upd)
     batch.commit()
     return len(cambios)
+
+
+def multar_sin_respuesta(team, pl, eventos):
+    """Al cerrarse el plazo: multa a los jugadores con cuenta que no han dicho si van."""
+    tipo = None
+    if pl["activo"] and pl["tipo"]:
+        t = team.reference.collection("tipos").document(pl["tipo"]).get()
+        tipo = (t.id, t.to_dict()) if t.exists else None
+    jugadores = [(p.id, p.to_dict() or {}) for p in team.reference.collection("jugadores").stream()]
+    batch, n = db.batch(), 0
+    for evid, d in eventos.items():
+        ev = d.to_dict() or {}
+        upd = {"plazoCerrado": True, "multadosPlazo": []}
+        cierre = cierre_de(ev, pl)
+        # Si el entreno se creó ya con el plazo casi cerrado, no se multa
+        creado = datetime.fromtimestamp((ev.get("creado") or 0) / 1000, TZ)
+        if tipo and ev.get("tipo") == "entreno" and cierre and creado < cierre - timedelta(hours=1):
+            confirma = ev.get("confirma") or {}
+            for pid, p in jugadores:
+                email = str(p.get("email", "")).lower()
+                if not email or p.get("activo") is False or p.get("rol") == "entrenador":
+                    continue
+                if confirma.get(email) in ("si", "no"):
+                    continue
+                tid, t = tipo
+                precio = float(t.get("precio") or 0)
+                batch.set(team.reference.collection("multas").document(), {
+                    "jugador": pid, "jugadorNombre": p.get("nombre", ""), "tipo": tid, "tipoNombre": t.get("nombre", ""),
+                    "unidad": "fijo", "precio": precio, "cantidad": 1, "importe": precio, "fecha": ev["fecha"],
+                    "nota": f"No contestó a la asistencia del entreno de las {ev.get('hora', '')}", "pagada": False,
+                    "notificada": False, "creado": int(datetime.now(TZ).timestamp() * 1000), "autor": "plazo"})
+                upd["multadosPlazo"].append(pid)
+                n += 1
+        batch.update(d.reference, upd)
+    batch.commit()
+    print(f"Plazo cerrado en {len(eventos)} entrenos, {n} multas por no contestar")
 
 
 def avisar_viernes():

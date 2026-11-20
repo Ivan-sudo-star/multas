@@ -229,6 +229,11 @@ const evTitle = ev => (EV_TXT[ev.tipo]||"Evento")+(ev.nota?" · "+ev.nota:"");
 const pkey = p => String(p?.email||"").toLowerCase();
 const confirmOf = (ev,p) => p && p.email ? (ev.confirma||{})[pkey(p)] : undefined;
 const noteOf = (ev,p) => p && p.email ? String((ev.notas||{})[pkey(p)]||"") : "";
+const plazoCfg = () => { const p=S.aj.plazo||{}; return {activo:!!p.activo, aviso:+p.aviso||8, cierre:(p.cierre===0?0:(+p.cierre||3)), tipo:p.tipo||""}; };
+const fmtHora = ms => new Date(ms).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+const fmtCierre = ms => { const d=new Date(ms), t=new Date(); const same=d.toDateString()===t.toDateString();
+  return (same?"hoy":d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"}))+" a las "+fmtHora(ms); };
+const isClosed = ev => !!ev.cierre && Date.now() >= ev.cierre;
 const pctTxt = (a,b) => b ? Math.round(a/b*100)+"%" : "–";
 function asStats(){
   // Solo eventos pasados (o de hoy) con lista pasada y dentro del periodo del conteo
@@ -274,8 +279,12 @@ function evCard(ev, upcoming){
     <div class="evhead"><span class="evdate"><b>${d.getDate()}</b><span>${MESES[d.getMonth()].slice(0,3)}</span></span>
       <span class="who"><b>${esc(evTitle(ev))}</b><span>${esc(d.toLocaleDateString("es-ES",{weekday:"long"}))}${ev.hora?" · "+esc(ev.hora):""}${ev.fecha===today()?" · hoy":""}</span></span>
       <span class="evcount">${count}</span></div>`;
+  if(upcoming && ev.cierre) html+= isClosed(ev)
+      ? `<span class="pill old" style="align-self:flex-start">Plazo cerrado${ev.plazoCerrado?" · ya se multó a quien no contestó":""}</span>`
+      : `<span class="note">⏳ Contesta antes de <b>${esc(fmtCierre(ev.cierre))}</b> o habrá multa</span>`;
   if(upcoming && conLinked) html+=`<span class="note">${si} van · ${no} no van · ${conLinked-si-no} sin responder${ps.length>conLinked?` · ${ps.length-conLinked} sin cuenta`:""}</span>`;
-  if(upcoming && me) html+=`<div class="row rsvp seg"><span class="note">¿Vas?</span><button type="button" data-rsvp="${esc(ev.id)}|si" aria-pressed="${myV==="si"}">Voy</button><button type="button" data-rsvp="${esc(ev.id)}|no" aria-pressed="${myV==="no"}">No voy</button></div>
+  const cl=isClosed(ev)?"disabled":"";
+  if(upcoming && me) html+=`<div class="row rsvp seg"><span class="note">¿Vas?</span><button type="button" data-rsvp="${esc(ev.id)}|si" aria-pressed="${myV==="si"}" ${cl}>Voy</button><button type="button" data-rsvp="${esc(ev.id)}|no" aria-pressed="${myV==="no"}" ${cl}>No voy</button></div>
     <div class="row"><input type="text" id="nt-${esc(ev.id)}" maxlength="80" value="${esc(noteOf(ev,me))}" placeholder="Comentario: solo a tirar, llegaré tarde…" aria-label="Comentario" style="flex:1;min-width:150px;min-height:38px;padding:6px 10px;font-size:15px"><button type="button" class="btn small ghost" data-rsvpnote="${esc(ev.id)}">Guardar</button></div>`;
   const notes = ps.map(p=>[p,noteOf(ev,p)]).filter(([,n])=>n);
   if(notes.length && !open) html+=`<div class="note">${notes.map(([p,n])=>`<b>${esc(p.nombre)}:</b> ${esc(n)}`).join("<br>")}</div>`;
@@ -394,6 +403,18 @@ function renderAjustes(){
   $("#tcFri").checked = !!S.aj.viernes;
   $("#tcCrestDel").hidden = !S.aj.escudo;
   $("#nFriWrap").hidden = !S.aj.viernes;
+  { const pl=plazoCfg(); const t=typeById(pl.tipo);
+    $("#plSummary").textContent = pl.activo
+      ? `Recordatorio ${pl.aviso} h antes del entreno. El plazo para contestar se cierra ${pl.cierre} h antes; quien no conteste recibe «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
+      : "Desactivado: no hay plazo ni multa por no contestar. Los recordatorios llegan 8 h antes.";
+    $("#plEdit").hidden = !S.canWrite;
+    if(S.canWrite && !document.activeElement?.closest("#plazoForm")){
+      $("#plActivo").checked=pl.activo; $("#plAviso").value=pl.aviso; $("#plCierre").value=pl.cierre;
+      const tipos=[...S.tipos].sort((a,b)=>(a.orden??99)-(b.orden??99));
+      const def = pl.tipo || (tipos.find(x=>/falta.*entreno/i.test(x.nombre))||tipos[0]||{}).id || "";
+      $("#plTipo").innerHTML = tipos.map(x=>`<option value="${esc(x.id)}">${esc(x.nombre)} · ${eur(x.precio)}</option>`).join("");
+      $("#plTipo").value = def;
+    } }
   // cuenta
   const e=email();
   $("#loginForm").hidden = !!e;
@@ -521,9 +542,10 @@ document.addEventListener("click", e=>{
   if(t.id==="evMore"){ S.showAllPast=true; renderAsis(); return; }
   if(d.evopen){ S.openEv = S.openEv===d.evopen?null:d.evopen; renderAsis(); return; }
   if(d.rsvp){ const [id,v]=d.rsvp.split("|"); const ev=evById(id); const me=myPlayer(); if(!ev||!me) return;
+      if(isClosed(ev)){ toast("El plazo para contestar ya se ha cerrado"); return; }
       const cur=confirmOf(ev,me); const nv = cur===v ? "" : v;
       run(()=>F.updateDoc(dref("eventos",id), new F.FieldPath("confirma",email()), nv), nv==="si"?"Apuntado: vas":nv==="no"?"Apuntado: no vas":"Respuesta quitada"); return; }
-  if(d.rsvpnote){ const id=d.rsvpnote; const v=(document.getElementById("nt-"+id)?.value||"").trim().slice(0,80);
+  if(d.rsvpnote){ const id=d.rsvpnote; if(isClosed(evById(id)||{})){ toast("El plazo para contestar ya se ha cerrado"); return; } const v=(document.getElementById("nt-"+id)?.value||"").trim().slice(0,80);
       run(()=>F.updateDoc(dref("eventos",id), new F.FieldPath("notas",email()), v), v?"Comentario guardado":"Comentario quitado"); return; }
   if(d.evping){ run(()=>F.updateDoc(dref("eventos",d.evping),{avisar:true}),"Aviso enviado: llegará en unos minutos"); return; }
   if(d.att){ const [id,pid,v]=d.att.split("|"); const ev=evById(id); if(!ev) return;
@@ -580,6 +602,22 @@ $("#nLive").addEventListener("change",e=>{ S.prefs.live=e.target.checked; store.
 $("#nMine").addEventListener("change",e=>{ S.prefs.mine=e.target.checked; store.set("multas.prefs",S.prefs); syncTokenPrefs(); });
 $("#nFri").addEventListener("change",e=>{ S.prefs.fri=e.target.checked; store.set("multas.prefs",S.prefs); renderResumen(); syncTokenPrefs(); });
 $("#fridayBtn").addEventListener("click",()=>{ const t=S.tipos.find(x=>/medio campo/i.test(x.nombre)); if(t) S.selType=t.id; S.selPlayers.clear(); location.hash="anadir"; renderAdd(); });
+$("#plazoForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const aviso=Math.min(48,Math.max(1,Math.round(+$("#plAviso").value||8))), cierre=Math.min(24,Math.max(0,Math.round(+$("#plCierre").value||0)));
+  if(cierre>=aviso){ toast("El plazo debe cerrarse después del recordatorio (menos horas antes)"); return; }
+  const tipo=$("#plTipo").value; if($("#plActivo").checked && !tipo){ toast("Elige qué multa se pone"); return; }
+  const activo=$("#plActivo").checked;
+  const b=F.writeBatch(db);
+  b.update(teamRef(),{plazo:{activo, aviso, cierre, tipo}});
+  // Aplicar también a los entrenos ya creados que aún no han empezado
+  let n=0;
+  S.eventos.filter(ev=>ev.tipo==="entreno" && ev.hora && ev.fecha>=today() && !ev.plazoCerrado).forEach(ev=>{
+    const start=new Date(ev.fecha+"T"+ev.hora).getTime(); if(start<=Date.now()) return;
+    b.update(dref("eventos",ev.id), activo ? {cierre:start-cierre*3600e3, plazoTipo:tipo} : {cierre:F.deleteField(), plazoTipo:F.deleteField()}); n++;
+  });
+  run(()=>b.commit(),"Plazo guardado"+(n?" y aplicado a "+n+" entrenos próximos":"")).then(()=>document.activeElement?.blur());
+});
 $("#tcFri").addEventListener("change",e=>run(()=>F.updateDoc(teamRef(),{viernes:e.target.checked}),e.target.checked?"Recordatorio activado para todo el equipo":"Recordatorio desactivado"));
 $("#tcFile").addEventListener("change",e=>{ const f=e.target.files?.[0]; if(f) setCrest(f); e.target.value=""; });
 $("#avText").addEventListener("input",()=>{ $("#avLeft").textContent=300-$("#avText").value.length; });
@@ -594,10 +632,15 @@ $("#evForm").addEventListener("submit",e=>{
   e.preventDefault();
   const fecha=$("#evFecha").value; if(!fecha){ toast("Elige la fecha"); return; }
   const rep=Math.max(1,+$("#evRep").value||1);
+  const tipoEv=$("#evTipo").value, horaEv=$("#evHora").value||"";
+  if(tipoEv==="entreno" && !horaEv){ toast("Pon la hora del entreno"); $("#evHora").focus(); return; }
+  const pl=plazoCfg();
   const base={tipo:$("#evTipo").value, hora:$("#evHora").value||"", nota:$("#evNota").value.trim(), asistencia:{}, confirma:{}, notas:{}, creado:Date.now(), autor:S.user?.uid||""};
   const b=F.writeBatch(db); const [y,m,dd]=fecha.split("-").map(Number);
   for(let i=0;i<rep;i++){ const d=new Date(y,m-1,dd+7*i); const f=d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
-    b.set(F.doc(col("eventos")),{...base, fecha:f, serie:i===0?rep:0, notificada:i>0}); }
+    const extra={};
+    if(pl.activo && tipoEv==="entreno" && horaEv){ extra.cierre = new Date(f+"T"+horaEv).getTime() - pl.cierre*3600e3; extra.plazoTipo = pl.tipo; }
+    b.set(F.doc(col("eventos")),{...base, ...extra, fecha:f, serie:i===0?rep:0, notificada:i>0}); }
   run(()=>b.commit(), rep>1 ? rep+" "+(base.tipo==="partido"?"partidos":"entrenos")+" creados (uno cada semana)" : (EV_TXT[base.tipo]||"Evento")+" creado").then(ok=>{ if(ok){ $("#evNota").value=""; $("#evRep").value="1"; } });
 });
 async function fineAbsences(id){

@@ -71,7 +71,9 @@ service cloud.firestore {
           request.resource.data.get('confirma', {}).diff(resource.data.get('confirma', {})).affectedKeys().hasOnly([myEmail()]) &&
           request.resource.data.get('notas', {}).diff(resource.data.get('notas', {})).affectedKeys().hasOnly([myEmail()]) &&
           request.resource.data.get('confirma', {}).get(myEmail(), '') in ['si', 'no', ''] &&
-          request.resource.data.get('notas', {}).get(myEmail(), '').size() <= 80
+          request.resource.data.get('notas', {}).get(myEmail(), '').size() <= 80 &&
+          // Pasado el cierre del plazo ya no se puede contestar
+          (resource.data.get('cierre', 0) == 0 || request.time.toMillis() < resource.data.cierre)
         );
       }
     }
