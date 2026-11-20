@@ -1,12 +1,12 @@
-# Notificaciones push gratis: GitHub ejecuta esto cada 10 minutos.
-# Necesita el secreto FIREBASE_SERVICE_ACCOUNT y la variable APP_URL (GUIA.md, paso 6).
+# Notificaciones push gratis.
+# cron-job.org lanza esta tarea cada 10 minutos (GitHub retrasa mucho su propia programación).
+# La programación de GitHub se queda como respaldo.
 name: Avisos de multas
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"   # multas nuevas, cada 10 minutos
-    - cron: "0 16 * * 5"     # viernes a las 17:00 (invierno) / 18:00 (verano), hora de España
   workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
 
 permissions:
   contents: read
@@ -28,20 +28,12 @@ jobs:
           cache: pip
           cache-dependency-path: scripts/requirements.txt
       - run: pip install -r scripts/requirements.txt
-      - name: Multas nuevas
-        if: github.event.schedule != '0 16 * * 5'
+      - name: Multas, asistencia, tablón y viernes
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           APP_URL: ${{ vars.APP_URL }}
         run: python scripts/avisos.py multas
-      - name: Recordatorio del viernes
-        if: github.event.schedule == '0 16 * * 5'
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          APP_URL: ${{ vars.APP_URL }}
-        run: python scripts/avisos.py viernes
       - name: Mantener la tarea activa
-        if: github.event.schedule == '0 16 * * 5'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/avisos.yml/enable" || true

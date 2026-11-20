@@ -115,6 +115,7 @@ def avisar_multas():
             return toks_team.get(team_id, [])
         total += avisar_eventos(team, toks)
         total += avisar_tablon(team, toks)
+        total += avisar_viernes_equipo(team, toks)
         nuevas = list(team.reference.collection("multas")
                       .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
         if not nuevas:
@@ -371,6 +372,20 @@ def multar_sin_respuesta(team, pl, eventos):
         batch.update(d.reference, upd)
     batch.commit()
     print(f"Plazo cerrado en {len(eventos)} entrenos, {n} multas por no contestar")
+
+
+def avisar_viernes_equipo(team, toks):
+    """Viernes entre las 17:00 y las 21:00: recordatorio del tiro de medio campo, una vez por semana."""
+    ahora = datetime.now(TZ)
+    t = team.to_dict() or {}
+    hoy = ahora.date().isoformat()
+    if ahora.weekday() != 4 or not (17 <= ahora.hour < 21) or not t.get("viernes") or t.get("viernesEnviado") == hoy:
+        return 0
+    toks_ = [tok for tok, info in toks() if info.get("viernes", True)]
+    if toks_:
+        send(toks_, "🎯 Tiro de medio campo", "Hoy es viernes: el último en meter paga 2 €.", {"tipo": "viernes"}, view="anadir")
+    team.reference.update({"viernesEnviado": hoy})
+    return 1
 
 
 def avisar_viernes():
