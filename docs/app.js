@@ -980,6 +980,12 @@ function renderScouting(){
   const sel=$("#rivSel");
   sel.innerHTML='<option value="">— Elige rival —</option>'+rs.map(r=>`<option value="${esc(r.id)}">${esc(r.nombre)}</option>`).join("");
   sel.value=S.rivalOpen||"";
+  // Fila de rivales: primero el del próximo partido
+  const prox=id=>S.eventos.filter(ev=>ev.tipo==="partido" && ev.rival===id && ev.fecha>=today()).sort((a,b)=>a.fecha.localeCompare(b.fecha))[0];
+  const ord=[...rs].sort((a,b)=>{ const pa=prox(a.id), pb=prox(b.id); return (pa?pa.fecha:"9")<(pb?pb.fecha:"9")?-1:(pa?pa.fecha:"9")>(pb?pb.fecha:"9")?1:(a.nombre||"").localeCompare(b.nombre||""); });
+  const corto=n=>String(n||"").replace(/^(C\.?B\.?|CB|CLUB)\s+/i,"").replace(/\s*-\s*.*$/,"").slice(0,22);
+  $("#rivChips").innerHTML=ord.map(x=>{ const p=prox(x.id); const casa=p&&/en casa/i.test(p.nota||"");
+    return `<button type="button" class="rivchip" role="tab" aria-pressed="${x.id===S.rivalOpen}" data-riv="${esc(x.id)}"><b>${esc(corto(x.nombre))}</b><span>${p?esc(new Date(p.fecha+"T12:00").toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"short"}))+(p.nota?(casa?" · 🏠":" · ✈️"):""):"sin partido"}</span></button>`; }).join("");
   // selector en el formulario de partido
   const er=$("#evRival"); if(er){ const cur=er.value; er.innerHTML='<option value="">— Sin rival —</option>'+rs.map(r=>`<option value="${esc(r.id)}">${esc(r.nombre)}</option>`).join(""); er.value=cur; $("#evRivalWrap").hidden=$("#evTipo").value!=="partido"; }
   if(box.contains(document.activeElement) && document.activeElement.tagName!=="BUTTON") return;
@@ -996,7 +1002,17 @@ function renderScouting(){
   const partidos=S.eventos.filter(ev=>ev.rival===r.id).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
   const notaHtml=n=>`<div class="nota"><p>${esc(n.texto)}<br><span class="mini">${esc(shortName(n.nombre))} · ${esc(haceCuanto(n.creado||0))}</span></p>${S.canWrite||n.autor===email()?`<button type="button" class="btn small ghost" data-notadel="${esc(n.id)}">✕</button>`:""}</div>`;
   const addNota=pid=>email()?`<div class="inl"><input type="text" id="rn-${esc(pid||"gen")}" maxlength="500" placeholder="${pid?"Tira bien de 3, zurdo, defiende flojo…":"Defensa zonal, juegan rápido…"}"><button type="button" class="btn small" data-notaadd="${esc(pid||"")}">Añadir</button></div>`:"";
-  let h=`<div class="card"><div class="who-line"><h3>${esc(r.nombre)}</h3>${S.canWrite?`<button type="button" class="btn small danger" data-rivdel="${esc(r.id)}">Borrar rival</button>`:""}</div>
+  const posCorta=p=>{ const m=String(p||"").match(/\(([^)]+)\)/); return m?m[1]:(p||""); };
+  const conNotas=plantilla.filter(j=>notasDe(j.id).length), sinNotas=plantilla.filter(j=>!notasDe(j.id).length);
+  const gen=notasDe("");
+  let h=`<div class="card resumen-sc"><div class="who-line"><h3>📋 Resumen · ${esc(r.nombre)}</h3><span class="mini">${S.rivNotas.length} notas</span></div>
+    ${gen.length?`<div class="sc-gen">🏀 ${gen.map(n=>esc(n.texto)).join(" · ")}</div>`:""}
+    ${conNotas.length?`<div class="tblwrap"><table class="sc-tbl"><thead><tr><th>Nº</th><th>Jugador</th><th>Pos</th><th>Scouting</th></tr></thead><tbody>`+
+      conNotas.map(j=>`<tr><td><span class="dor sm">${esc(j.dorsal??"–")}</span></td><td><b>${esc(shortName(j.nombre))}</b></td><td>${esc(posCorta(j.pos))}</td><td>${notasDe(j.id).map(n=>esc(n.texto)).join(" · ")}</td></tr>`).join("")+
+      `</tbody></table></div>`:'<p class="note">Todavía no hay notas de jugadores. Añadidlas abajo, en cada jugador.</p>'}
+    ${sinNotas.length?`<p class="mini">Sin notas: ${sinNotas.map(j=>(j.dorsal!=null&&j.dorsal!==""?"#"+esc(j.dorsal)+" ":"")+esc(shortName(j.nombre))).join(", ")}</p>`:""}
+  </div>`;
+  h+=`<div class="card"><div class="who-line"><h3>${esc(r.nombre)}</h3>${S.canWrite?`<button type="button" class="btn small danger" data-rivdel="${esc(r.id)}">Borrar rival</button>`:""}</div>
     ${partidos.length?`<span class="note">Partidos: ${partidos.map(p=>esc(dayName(p.fecha))).join(" · ")}</span>`:""}
     <h4 style="margin:4px 0 0">Notas generales del equipo</h4>${notasDe("").map(notaHtml).join("")||'<span class="mini">Sin notas todavía.</span>'}${addNota("")}</div>`;
   h+=`<div class="who-line"><h3>Plantilla (${plantilla.length})</h3>${S.canWrite&&plantilla.length?`<button type="button" class="btn small ${S.dorsalMode?"":"ghost"}" id="dorMode">${S.dorsalMode?"Cancelar":"🔢 Poner dorsales"}</button>`:""}</div>`;
@@ -1014,6 +1030,7 @@ function renderScouting(){
 }
 function handleScoutClick(t,d){
   if(d.scout){ openRival(d.scout); location.hash="scouting"; return true; }
+  if(d.riv){ openRival(d.riv); return true; }
   if(d.notaadd!==undefined){ const pid=d.notaadd; const i=document.getElementById("rn-"+(pid||"gen")); const v=(i?.value||"").trim(); if(!v){ toast("Escribe la nota"); return true; }
     i.value=""; i.blur();
     run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",S.rivalOpen,"notas"),{jugador:pid, texto:v.slice(0,500), autor:email(), nombre:myName(), creado:Date.now(), notificada:false}),"Nota añadida. Se avisará al equipo"); return true; }

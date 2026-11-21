@@ -167,7 +167,8 @@
 <!-- SCOUTING -->
 <section id="v-scouting" class="view" hidden><div class="wrap">
   <div><h2>🔎 Scouting</h2><p class="sub">Plantillas de los rivales e información de cada jugador. La ve todo el equipo.</p></div>
-  <div class="row"><label class="f">Rival<select id="rivSel"></select></label></div>
+  <div class="rivchips" id="rivChips" role="tablist" aria-label="Rivales"></div>
+  <label class="f" hidden>Rival<select id="rivSel"></select></label>
   <div id="rivBox"></div>
   <div class="card" id="fbcvCard" hidden>
     <h3>Gestionar rivales · FBCV</h3>
