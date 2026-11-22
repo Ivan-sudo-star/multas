@@ -264,7 +264,12 @@ function renderAsis(){
   if(!$("#evFecha").value) $("#evFecha").value=today();
   const td=today();
   const evs=[...S.eventos].sort((a,b)=>((a.fecha||"")+(a.hora||"")).localeCompare((b.fecha||"")+(b.hora||"")));
-  const next=evs.filter(e=>e.fecha>=td), past=evs.filter(e=>e.fecha<td).reverse();
+  // Un entreno o partido deja de estar en «Próximos» 2 h después de empezar (sin hora: al acabar el día)
+  const finEv=e=>{ if(!e.hora){ const d=new Date(e.fecha+"T23:59"); return d.getTime(); } return new Date(e.fecha+"T"+e.hora).getTime()+2*3600e3; };
+  const ahoraMs=Date.now();
+  const next=evs.filter(e=>finEv(e)>ahoraMs), past=evs.filter(e=>finEv(e)<=ahoraMs).reverse();
+  $("#evPastCount").textContent=past.length?`(${past.length})`:"";
+  clearTimeout(S.asisT); const prox=next[0]; if(prox) S.asisT=setTimeout(renderAsis, Math.min(finEv(prox)-ahoraMs+1000, 6*3600e3));
   const per=asStats(); let te=[0,0], tp=[0,0];
   Object.values(per).forEach(r=>{ te[0]+=r.e[0]; te[1]+=r.e[1]; tp[0]+=r.p[0]; tp[1]+=r.p[1]; });
   $("#asEnt").textContent=pctTxt(te[0],te[1]); $("#asPar").textContent=pctTxt(tp[0],tp[1]);

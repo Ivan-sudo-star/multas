@@ -290,3 +290,7 @@ a.scoutlink{display:flex;flex-direction:column;gap:2px;text-decoration:none;colo
 .sug{background:var(--bg);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
 .sug p{margin:0;white-space:pre-wrap}
 .sug.hecha{opacity:.55}
+details.past summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:6px 0}
+details.past summary::-webkit-details-marker{display:none}
+details.past summary h3::before{content:"▸ ";color:var(--muted)}
+details.past[open] summary h3::before{content:"▾ "}
