@@ -122,6 +122,7 @@ def avisar_multas():
         total += aviso_fichajes(team, toks)
         total += avisar_scouting(team, toks)
         total += previa_partido(team, toks)
+        total += fantasy_equipo(team, toks)
         nuevas = list(team.reference.collection("multas")
                       .where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
         if not nuevas:
@@ -133,6 +134,7 @@ def avisar_multas():
         for d in nuevas:
             batch.update(d.reference, {"notificada": True})
         batch.commit()
+    total += sugerencias_semanales()
     if not total:
         print("::notice::Nada que avisar")
 
@@ -641,6 +643,166 @@ def previa_partido(team, toks):
         d.reference.update({"scoutPrevia": True})
         hechos += 1
     return hechos
+
+
+def sugerencias_semanales():
+    """Domingo desde las 10:00: resumen de sugerencias de mejora, solo para el propietario de la app."""
+    ahora = datetime.now(TZ)
+    hoy = ahora.date().isoformat()
+    if ahora.weekday() != 6 or ahora.hour < 10:
+        return 0
+    est_ref = db.collection("app").document("estado")
+    est = est_ref.get().to_dict() or {}
+    if est.get("sugSemana") == hoy:
+        return 0
+    pend = list(db.collection("sugerencias").where(filter=firestore.FieldFilter("enviada", "==", False)).stream())
+    est_ref.set({"sugSemana": hoy}, merge=True)
+    if not pend:
+        return 0
+    owner = str((db.collection("equipos").document("ONTINYENT").get().to_dict() or {}).get("propietario", "")).lower()
+    sugs = [d.to_dict() or {} for d in pend]
+    body = " ".join(f"• {x.get('texto', '')[:70]} ({x.get('equipoNombre') or x.get('equipo') or '?'})" for x in sugs)
+    title = f"💡 {len(sugs)} sugerencia{'s' if len(sugs) != 1 else ''} de mejora esta semana"
+    cache, mensajes = {}, []
+    for tok, info in all_tokens():
+        team = info.get("equipo") or LEGACY_TEAM
+        if team not in cache:
+            cache[team] = {p.id: str((p.to_dict() or {}).get("email", "")).lower()
+                           for p in db.collection("equipos").document(team).collection("jugadores").stream()}
+        if owner and cache[team].get(info.get("jugador", "")) == owner:
+            mensajes.append((tok, title, body[:200]))
+    send_each(mensajes, data={"tipo": "aviso"}, view="ajustes")
+    batch = db.batch()
+    for d in pend:
+        batch.update(d.reference, {"enviada": True})
+    batch.commit()
+    return 1
+
+
+def fantasy_equipo(team, toks):
+    """Fantasy: aviso para hacer el quinteto, apertura de notas y cierre de la jornada con puntos y precios."""
+    t = team.to_dict() or {}
+    cfg = t.get("fantasy") or {}
+    if not cfg.get("activo"):
+        return 0
+    presupuesto = float(cfg.get("presupuesto") or 50)
+    ahora = datetime.now(TZ)
+    hoy = ahora.date()
+    desde, hasta = (hoy - timedelta(days=4)).isoformat(), (hoy + timedelta(days=1)).isoformat()
+    F = firestore.FieldFilter
+    evs = [d for d in team.reference.collection("eventos").where(filter=F("fecha", ">=", desde)).where(filter=F("fecha", "<=", hasta)).stream()
+           if (d.to_dict() or {}).get("tipo") == "partido" and (d.to_dict() or {}).get("hora")]
+    if not evs:
+        return 0
+    jug = {p.id: p.to_dict() or {} for p in team.reference.collection("jugadores").stream()}
+    email_de = {pid: str(p.get("email", "")).lower() for pid, p in jug.items()}
+    pid_de = {e: pid for pid, e in email_de.items() if e}
+    participantes = {pid for pid, p in jug.items() if p.get("email") and p.get("activo") is not False and p.get("rol") != "entrenador"}
+    entrenadores = {pid for pid, p in jug.items() if p.get("email") and p.get("rol") == "entrenador"}
+    tokens = toks()
+    hecho = 0
+    for d in evs:
+        ev = d.to_dict() or {}
+        start = inicio(ev)
+        jref = team.reference.collection("jornadas").document(d.id)
+        rival = (ev.get("nota") or "").replace("en casa contra ", "").replace("fuera contra ", "") or "el rival"
+        if ev.get("rival"):
+            rd = team.reference.collection("rivales").document(ev["rival"]).get()
+            if rd.exists:
+                rival = (rd.to_dict() or {}).get("nombre", rival)
+        upd = {}
+        # A) 3 h antes: a quien no tiene quinteto
+        if start - timedelta(hours=3) <= ahora < start and not ev.get("fanAviso"):
+            con = {a.id for a in jref.collection("alineaciones").stream()}
+            falta = {pid for pid in participantes if email_de[pid] not in con}
+            msgs = [(tok, "🏀 Fantasy: haz tu quinteto", f"Contra {rival}. Se cierra {hora_txt(start, hoy)}.")
+                    for tok, info in tokens if info.get("jugador") in falta]
+            send_each(msgs, data={"tipo": "aviso"}, view="fantasy")
+            upd["fanAviso"] = True
+        # B) 2 h después del inicio: abrir notas (jugadores y entrenador)
+        if start + timedelta(hours=2) <= ahora < start + timedelta(hours=48) and not ev.get("fanNotas"):
+            fin = start + timedelta(hours=48)
+            msgs = [(tok, "⭐ Pon nota a tus compañeros", f"Partido contra {rival}. Notas de −2 a 10 y MVP, anónimas. Hasta {hora_txt(fin, hoy)}.")
+                    for tok, info in tokens if info.get("jugador") in participantes | entrenadores]
+            send_each(msgs, data={"tipo": "aviso"}, view="fantasy")
+            upd["fanNotas"] = True
+        # C) 48 h después: cerrar la jornada
+        if start + timedelta(hours=48) <= ahora < start + timedelta(days=7) and not ev.get("fanCerrada"):
+            fantasy_cerrar(team, d.id, ev, start, rival, jug, email_de, pid_de, participantes, presupuesto, tokens)
+            upd["fanCerrada"] = True
+        if upd:
+            d.reference.update(upd)
+            hecho += 1
+    return hecho
+
+
+def fantasy_cerrar(team, evid, ev, start, rival, jug, email_de, pid_de, participantes, presupuesto, tokens):
+    est_ref = team.reference.collection("fantasy").document("estado")
+    est = est_ref.get().to_dict() or {}
+    precios = {k: float(v) for k, v in (est.get("precios") or {}).items()}
+    pr = lambda pid: precios.get(pid, 10.0)
+    jref = team.reference.collection("jornadas").document(evid)
+    jugables = {pid for pid, p in jug.items() if p.get("activo") is not False and p.get("rol") != "entrenador"}
+    asis, conf = ev.get("asistencia") or {}, ev.get("confirma") or {}
+    if asis:
+        jugaron = {pid for pid in jugables if asis.get(pid) in ("si", "tarde")}
+    else:
+        jugaron = {pid for pid in jugables if email_de.get(pid) and conf.get(email_de[pid]) == "si"}
+    limite_votos = start + timedelta(hours=48)
+    notas, mvps = {pid: [] for pid in jugaron}, {}
+    for v in jref.collection("votos").stream():
+        x = v.to_dict() or {}
+        ts = x.get("actualizado")
+        if ts and ts > limite_votos:
+            continue
+        yo = pid_de.get(v.id)
+        for pid, n in (x.get("notas") or {}).items():
+            if pid in notas and pid != yo and isinstance(n, (int, float)) and -2 <= n <= 10:
+                notas[pid].append(float(n))
+        m = x.get("mvp")
+        if m in jugaron and m != yo:
+            mvps[m] = mvps.get(m, 0) + 1
+    media = {pid: (round(sum(ns) / len(ns), 1) if ns else 5.0) for pid, ns in notas.items()}
+    mvp = max(mvps, key=lambda p: (mvps[p], media.get(p, 0))) if mvps else None
+    puntos = {pid: (media[pid] + (3 if pid == mvp else 0) if pid in jugaron else 0.0) for pid in jugables}
+    # Quintetos válidos: guardados antes del inicio, de participantes, 5 jugadores, capitán y dentro de presupuesto
+    alins = {}
+    for a in jref.collection("alineaciones").stream():
+        x = a.to_dict() or {}
+        ts = x.get("actualizado")
+        js = [p for p in (x.get("jugadores") or []) if p in jugables]
+        if not ts or ts > start or pid_de.get(a.id) not in participantes or len(set(js)) != 5 or x.get("capitan") not in js:
+            continue
+        if sum(pr(p) for p in js) > presupuesto + 0.01:
+            continue
+        alins[a.id] = (js, x.get("capitan"), x.get("nombre", ""))
+    n = len(alins) or 1
+    owner = {pid: sum(1 for js, _, _ in alins.values() if pid in js) / n for pid in jugables}
+    resultados = {}
+    for em, (js, cap, _) in alins.items():
+        resultados[em] = round(sum(puntos[p] for p in js) + puntos[cap] + sum(1 for p in js if owner[p] <= 0.25), 1)
+    # Precios: suben o bajan según la jornada
+    for pid in jugables:
+        if pid in jugaron:
+            precios[pid] = min(20.0, max(4.0, round((pr(pid) + (puntos[pid] - 6) * 0.3) * 2) / 2))
+        else:
+            precios[pid] = max(4.0, pr(pid) - 0.5)
+    clas = est.get("clasificacion") or {}   # por jugador (id), para poder importar ligas anteriores
+    for em, pts in resultados.items():
+        pid = pid_de.get(em, em)
+        c = clas.get(pid) or {}
+        nombre = jug.get(pid, {}).get("nombre") or alins[em][2] or em
+        clas[pid] = {"nombre": nombre, "total": round(float(c.get("total", 0)) + pts, 1), "jornadas": int(c.get("jornadas", 0)) + 1, "ultima": pts}
+    ganador = max(resultados, key=resultados.get) if resultados else None
+    ultima = {"rival": rival, "fecha": ev.get("fecha"), "mvpNombre": jug.get(mvp, {}).get("nombre", "") if mvp else "",
+              "ganador": (clas.get(pid_de.get(ganador, ganador)) or {}).get("nombre", "") if ganador else "", "ganadorPts": resultados.get(ganador) if ganador else None}
+    jref.set({"cerrada": True, "rival": rival, "fecha": ev.get("fecha"), "puntos": puntos, "mvp": mvp, "resultados": resultados})
+    est_ref.set({"precios": precios, "clasificacion": clas, "ultima": ultima}, merge=True)
+    partes = ([f"MVP: {nombre_corto(ultima['mvpNombre'])}"] if mvp else []) + \
+        ([f"Ganó {nombre_corto(ultima['ganador'])} con {ultima['ganadorPts']} pts"] if ganador else ["Nadie hizo quinteto"])
+    body = " · ".join(partes) + ". Mira la clasificación."
+    send_each([(tok, f"🏆 Fantasy · {rival}", body[:200]) for tok, _ in tokens], data={"tipo": "aviso"}, view="fantasy")
+    print(f"::notice::Fantasy cerrado ({rival}): {len(alins)} quintetos, MVP {mvp}")
 
 
 def aviso_fichajes(team, toks):

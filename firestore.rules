@@ -34,7 +34,10 @@ service cloud.firestore {
       allow list: if false;
       allow create: if hasEmail() && myEmail() in request.resource.data.admins && validTeam() &&
                        request.resource.data.get('propietario', '') == myEmail();
-      allow update: if isAdminOf(e) && validTeam() && myEmail() in resource.data.admins && ownerOk();
+      allow update: if isAdminOf(e) && validTeam() && myEmail() in resource.data.admins && ownerOk() &&
+                       // El fantasy solo lo activa o desactiva el propietario
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['fantasy']) ||
+                        resource.data.get('propietario', '') == myEmail());
       allow delete: if hasEmail() && (resource.data.get('propietario', '') == myEmail() ||
                        (resource.data.get('propietario', '') == '' && myEmail() in resource.data.admins));
 
@@ -88,6 +91,32 @@ service cloud.firestore {
         }
       }
 
+      // Fantasy: el estado y los resultados solo los escribe la tarea automática.
+      match /fantasy/{doc} {
+        allow read: if signedIn();
+        // Solo el propietario, para importar una liga anterior (valores y clasificación)
+        allow write: if hasEmail() && get(/databases/$(database)/documents/equipos/$(e)).data.get('propietario', '') == myEmail();
+      }
+      match /jornadas/{j} {
+        allow read: if signedIn();
+        allow write: if false;
+        // Nadie puede ver el quinteto ni las notas de nadie: cada uno solo lee y escribe lo suyo.
+        match /alineaciones/{who} {
+          allow read: if hasEmail() && who == myEmail();
+          allow create, update: if hasEmail() && who == myEmail() &&
+            get(/databases/$(database)/documents/equipos/$(e)).data.get('fantasy', {}).get('activo', false) == true &&
+            request.resource.data.jugadores is list && request.resource.data.jugadores.size() == 5 &&
+            request.resource.data.capitan in request.resource.data.jugadores &&
+            request.resource.data.actualizado == request.time;
+          allow delete: if hasEmail() && who == myEmail();
+        }
+        match /votos/{who} {
+          allow read: if hasEmail() && who == myEmail();
+          allow create, update: if hasEmail() && who == myEmail() &&
+            request.resource.data.notas is map && request.resource.data.actualizado == request.time;
+        }
+      }
+
       // Tablón de avisos: todos leen, solo los administradores escriben.
       match /avisos/{id} {
         allow read: if signedIn();
@@ -112,6 +141,18 @@ service cloud.firestore {
           (resource.data.get('cierre', 0) == 0 || request.time.toMillis() < resource.data.cierre)
         );
       }
+    }
+
+    // Sugerencias de mejora: cualquiera puede enviar; solo las lee el propietario de la app
+    // (el propietario del equipo ONTINYENT).
+    function isAppOwner() {
+      return hasEmail() &&
+        get(/databases/$(database)/documents/equipos/ONTINYENT).data.get('propietario', '') == myEmail();
+    }
+    match /sugerencias/{id} {
+      allow create: if signedIn() && request.resource.data.texto is string &&
+        request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 500;
+      allow read, update, delete: if isAppOwner();
     }
 
     // Lista de equipos de cada persona (solo la ve ella misma)
