@@ -1207,7 +1207,8 @@ async function importFantasy(){
     Object.entries(data.precios||{}).forEach(([n,v])=>{ const p=buscar(n); p?precios[p.id]=+v:falta.push(n); });
     Object.entries(data.clasificacion||{}).forEach(([n,x])=>{ const p=buscar(n); p?clas[p.id]={nombre:p.nombre,total:+x.total||0,jornadas:+x.jornadas||0,ultima:x.ultima??null}:falta.push(n); });
     if(!Object.keys(precios).length && !Object.keys(clas).length){ toast("No hay datos para importar todavía"); return; }
-    await run(()=>F.setDoc(F.doc(db,"equipos",TEAM,"fantasy","estado"),{precios,clasificacion:clas,importado:Date.now()},{merge:true}),
+    const extra = data.ultima ? {ultima:data.ultima} : {};
+    await run(()=>F.setDoc(F.doc(db,"equipos",TEAM,"fantasy","estado"),{precios,clasificacion:clas,...extra,importado:Date.now()},{merge:true}),
       `Liga importada: ${Object.keys(precios).length} valores y ${Object.keys(clas).length} en la clasificación`+(falta.length?`. Sin encontrar: ${[...new Set(falta)].join(", ")}`:""));
   }catch(e){ console.error(e); toast("No se pudo importar: "+errMsg(e)); }
 }

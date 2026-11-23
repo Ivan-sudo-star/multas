@@ -1,5 +1,70 @@
 {
- "_nota": "Rellenar con los datos de la liga anterior",
- "precios": {},
- "clasificacion": {}
+ "_fuente": "HoopLeague · liga Sènior Ontinyent (909) · copiado el 23/11/2026 tras la jornada 6",
+ "precios": {
+  "VICTOR CAMBRA": 15.6,
+  "IÑAKI VILLAR": 14.4,
+  "XAVIER NOGUERA": 13.9,
+  "IVAN CAMBRA": 13.6,
+  "HUGO ABAD": 12.6,
+  "S. T.": 11.9,
+  "IKER GARCIA": 8.3,
+  "BLAI REIG": 5.9,
+  "VICTOR FERNANDEZ": 5.8,
+  "PAU CERDA": 17,
+  "DANIEL CERRADA": 6.4,
+  "MAIK": 2
+ },
+ "clasificacion": {
+  "IÑAKI VILLAR": {
+   "total": 96,
+   "jornadas": 6,
+   "ultima": 51
+  },
+  "IKER GARCIA": {
+   "total": 90,
+   "jornadas": 6,
+   "ultima": 51
+  },
+  "VICTOR FERNANDEZ": {
+   "total": 83,
+   "jornadas": 6,
+   "ultima": 38
+  },
+  "S. T.": {
+   "total": 78,
+   "jornadas": 6,
+   "ultima": 39
+  },
+  "IVAN CAMBRA": {
+   "total": 77,
+   "jornadas": 6,
+   "ultima": 51
+  },
+  "XAVIER NOGUERA": {
+   "total": 77,
+   "jornadas": 6,
+   "ultima": 46
+  },
+  "BLAI REIG": {
+   "total": 76,
+   "jornadas": 6,
+   "ultima": 41
+  },
+  "HUGO ABAD": {
+   "total": 68,
+   "jornadas": 6,
+   "ultima": 37
+  },
+  "VICTOR CAMBRA": {
+   "total": 64,
+   "jornadas": 6,
+   "ultima": 33
+  }
+ },
+ "ultima": {
+  "rival": "jornada 6 (HoopLeague)",
+  "mvpNombre": "PAU CERDA",
+  "ganador": "",
+  "ganadorPts": null
+ }
 }
