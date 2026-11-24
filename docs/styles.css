@@ -367,3 +367,5 @@ html.grande body{zoom:1.12}
 .jug-card:active{transform:scale(.98)}
 .jug-card:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
 .jug-grid .empty{grid-column:1/-1}
+li.nextmore{list-style:none;padding:0;background:none;border:0}
+li.nextmore > details > ul{margin-top:6px}
