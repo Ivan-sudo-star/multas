@@ -369,3 +369,9 @@ html.grande body{zoom:1.12}
 .jug-grid .empty{grid-column:1/-1}
 li.nextmore{list-style:none;padding:0;background:none;border:0}
 li.nextmore > details > ul{margin-top:6px}
+.pzmedia{gap:6px;align-items:center}
+label.filebtn{cursor:pointer;display:inline-flex;align-items:center}
+#pzVidBox video{width:100%;max-height:60vh;border-radius:10px;background:#000;display:block;margin:6px 0}
+.pzfoto{margin:0;padding:6px}
+.pzfoto img{width:100%;height:auto;border-radius:9px;display:block}
+.pzfoto figcaption{padding:4px 4px 0}

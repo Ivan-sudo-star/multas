@@ -1597,7 +1597,8 @@ function notaPartidoHtml(ev){
   return `<div class="inl"><input type="text" id="np-${esc(ev.id)}" maxlength="300" placeholder="¿Qué funcionó y qué no? (para la vuelta)"><button type="button" class="btn small ghost" data-notapartido="${esc(ev.id)}">📝 Guardar</button></div>`;
 }
 // Pizarra de jugadas, por pasos. Cada paso guarda dónde está cada ficha y las flechas de lo que pasa en él.
-const PZ={modo:"mover", pasos:null, i:0, arrastra:null, trazo:null, abierta:null, anim:null};
+const PZ={modo:"mover", pasos:null, i:0, arrastra:null, trazo:null, abierta:null, anim:null, imgs:{}, imgsGuardadas:new Set(), fondo:true};
+const PZ_IMGEL=new Map();
 const pzCur=()=>PZ.pasos[PZ.i];
 // Tipos de trazo: mov = movimiento, bloq = bloqueo, pase, mano = mano a mano, opc = opción (no se ejecuta al pasar de paso)
 const PZ_KIND={dibujar:"mov", bloqueo:"bloq", pase:"pase", mano:"mano", tiro:"tiro", opcion:"opc"};
@@ -1606,7 +1607,9 @@ const PZ_ARO=[0.5,52/560]; // centro del aro (relativo a la pista)
 let PZ_DEF="#29297a";
 function pzInicial(){ return {fichas:[...[0.5,0.15,0.85,0.25,0.75].map((x,i)=>({t:"a",n:i+1,x,y:[0.55,0.25,0.25,0.75,0.75][i]})), ...[0.5,0.3,0.7,0.35,0.65].map((x,i)=>({t:"d",n:i+1,x,y:[0.42,0.3,0.3,0.62,0.62][i]})), {t:"b",n:0,x:0.53,y:0.6}], trazos:[]}; }
 function pzInit(){ if(!PZ.pasos){ PZ.pasos=[pzInicial()]; PZ.i=0; } pzDraw(); }
-const pzCopia=st=>({fichas:st.fichas.map(f=>({...f})), trazos:st.trazos.map(t=>({k:t.k||"mov", p:[...t.p]}))});
+const pzCopia=st=>({fichas:st.fichas.map(f=>({...f})), trazos:st.trazos.map(t=>({k:t.k||"mov", p:[...t.p]})), ...(st.img?{img:st.img}:{})});
+// Fotos de los pasos (se guardan aparte, en jugadas/{id}/imgs)
+function pzImgEl(id){ const src=PZ.imgs[id]; if(!src) return null; let e=PZ_IMGEL.get(id); if(!e||e.src!==src){ e=new Image(); e.onload=()=>{ if(!PZ.anim) pzDraw(); }; e.src=src; PZ_IMGEL.set(id,e); } return e.complete&&e.naturalWidth?e:null; }
 // De dónde sale cada flecha: de una ficha, o del final de otra flecha (así se encadenan, p. ej. bloqueo y continuación)
 function pzPadre(st,t,c){ if(t.k==="opc") return null; const W=c.width,H=c.height, bal=pzBalon(t.k); let best=null,d=36;
   st.fichas.forEach(f=>{ if(bal!==(f.t==="b")) return; const dd=Math.hypot((f.x-t.p[0])*W,(f.y-t.p[1])*H); if(dd<d){ d=dd; best={f}; } });
@@ -1625,6 +1628,8 @@ function pzDraw(st,cv){
   const css=getComputedStyle(document.documentElement); const lin=css.getPropertyValue("--muted").trim()||"#888"; const ink=css.getPropertyValue("--ink").trim()||"#17173d";
   g.setLineDash([]); g.globalAlpha=1; PZ_DEF=css.getPropertyValue("--pz-def").trim()||"#29297a";
   g.clearRect(0,0,W,H); g.fillStyle=css.getPropertyValue("--orange-soft").trim()||"#fde7de"; g.fillRect(0,0,W,H);
+  const fimg=main&&PZ.fondo&&PZ.pasos[PZ.i]?.img?pzImgEl(PZ.pasos[PZ.i].img):null;
+  if(fimg){ const k=Math.min(W/fimg.naturalWidth,H/fimg.naturalHeight), iw=fimg.naturalWidth*k, ih=fimg.naturalHeight*k; g.globalAlpha=0.5; g.drawImage(fimg,(W-iw)/2,(H-ih)/2,iw,ih); g.globalAlpha=1; }
   g.strokeStyle=lin; g.lineWidth=2;
   g.strokeRect(4,4,W-8,H-8);
   g.strokeRect(W/2-96,4,192,232);
@@ -1662,6 +1667,9 @@ function pzDraw(st,cv){
   if(!main||!PZ.anim||PZ.anim.pausa){ st.trazos.forEach(flecha); if(main&&PZ.trazo) flecha(PZ.trazo); }
   st.fichas.filter(f=>f.t!=="b").forEach(f=>pzFicha(g,f,W,H)); st.fichas.filter(f=>f.t==="b").forEach(f=>pzFicha(g,f,W,H));
   if(!main) return;
+  const im=PZ.pasos[PZ.i]?.img, box=$("#pzFotoBox");
+  if(box){ const src=im?PZ.imgs[im]:""; box.hidden=!src; if(src&&$("#pzFoto").getAttribute("src")!==src) $("#pzFoto").src=src; $("#pzFotoCap").textContent=src?`Foto del paso ${PZ.i+1}`:"";
+    $("#pzFotoQuitar").hidden=!im||!S.canWrite; $("#pzFondoSw").hidden=!PZ.pasos.some(p=>p.img); }
   const tx=$("#pzPaso"); if(tx) tx.textContent=`Paso ${PZ.i+1} de ${PZ.pasos.length}`;
   const ant=$("#pzAnt"), sig=$("#pzSig"), qu=$("#pzQuitar"); if(ant){ ant.disabled=PZ.i===0||!!PZ.anim; sig.disabled=PZ.i>=PZ.pasos.length-1||!!PZ.anim; qu.disabled=PZ.pasos.length<2||!!PZ.anim; }
   const pl=$("#pzPlay"); if(pl){ pl.textContent=PZ.anim?"⏹ Parar":"▶️ Reproducir"; pl.disabled=PZ.pasos.length<2 && !PZ.anim; }
@@ -1674,7 +1682,7 @@ function pzFicha(g,f,W,H){ const x=f.x*W,y=f.y*H; g.lineWidth=3; g.setLineDash([
 function pzPortador(st,c){ const b=st.fichas.find(f=>f.t==="b"); if(!b||st.trazos.some(t=>pzBalon(t.k)&&pzDueno(st,t,c)===b)) return null;
   let best=null,d=40; st.fichas.forEach(f=>{ if(f.t!=="a") return; const dd=Math.hypot((f.x-b.x)*c.width,(f.y-b.y)*c.height); if(dd<d){ d=dd; best=f; } }); return best?{b,f:best}:null; }
 // Nuevo paso: las fichas con flecha ya aparecen donde acaba su flecha
-function pzNuevoPaso(){ const c=$("#pzCanvas"); const st=pzCur(); const nx=pzCopia(st); nx.trazos=[];
+function pzNuevoPaso(){ const c=$("#pzCanvas"); const st=pzCur(); const nx=pzCopia(st); nx.trazos=[]; delete nx.img;
   st.fichas.forEach((f,j)=>{ const r=pzCadena(st,f,c); if(!r) return; nx.fichas[j].x=r[r.length-2]; nx.fichas[j].y=r[r.length-1]; });
   const po=pzPortador(st,c); if(po){ const nf=nx.fichas[st.fichas.indexOf(po.f)], nb=nx.fichas[st.fichas.indexOf(po.b)]; nb.x=Math.min(1,Math.max(0,po.b.x+nf.x-po.f.x)); nb.y=Math.min(1,Math.max(0,po.b.y+nf.y-po.f.y)); }
   PZ.pasos.splice(PZ.i+1,0,nx); PZ.i++; pzDraw(); }
@@ -1707,15 +1715,39 @@ function pzPos(e){ const c=$("#pzCanvas"), r=c.getBoundingClientRect(); return {
   const fin=()=>{ if(PZ.trazo && PZ.trazo.p.length>=4){ if(PZ.trazo.k==="tiro"){ const q=PZ.trazo.p; PZ.trazo.p=[q[0],q[1],PZ_ARO[0],+PZ_ARO[1].toFixed(3)]; } else if(pzBalon(PZ.trazo.k)){ const q=PZ.trazo.p; PZ.trazo.p=[q[0],q[1],q[q.length-2],q[q.length-1]]; } pzCur().trazos.push(PZ.trazo); } PZ.trazo=null; PZ.arrastra=null; pzDraw(); };
   c.addEventListener("pointerup",fin); c.addEventListener("pointercancel",fin);
 })();
-function pzDatos(){ return PZ.pasos.map(st=>({fichas:st.fichas.map(f=>({t:f.t,n:f.n,x:+(+f.x).toFixed(3),y:+(+f.y).toFixed(3)})), trazos:st.trazos.map(t=>({k:t.k||"mov",p:t.p}))})); }
+function pzDatos(){ return PZ.pasos.map(st=>({fichas:st.fichas.map(f=>({t:f.t,n:f.n,x:+(+f.x).toFixed(3),y:+(+f.y).toFixed(3)})), trazos:st.trazos.map(t=>({k:t.k||"mov",p:t.p})), ...(st.img&&PZ.imgs[st.img]?{img:st.img}:{})})); }
 function pzCargar(j){ const pasos=j.pasos?.length?j.pasos:[{fichas:j.fichas||[],trazos:(j.trazos||[]).map(x=>({k:"mov",p:x.p}))}];
-  PZ.pasos=pasos.map(st=>{ const c=pzCopia({fichas:st.fichas||[],trazos:st.trazos||[]}); if(!c.fichas.some(f=>f.t==="b")) c.fichas.push({t:"b",n:0,x:0.53,y:0.6}); return c; }); PZ.i=0; PZ.abierta={id:j.id,nombre:j.nombre}; }
+  PZ.pasos=pasos.map(st=>{ const c=pzCopia({fichas:st.fichas||[],trazos:st.trazos||[],img:st.img}); if(!c.fichas.some(f=>f.t==="b")) c.fichas.push({t:"b",n:0,x:0.53,y:0.6}); return c; }); PZ.i=0; PZ.abierta={id:j.id,nombre:j.nombre};
+  PZ.imgs={}; PZ.imgsGuardadas=new Set();
+  if(PZ.pasos.some(p=>p.img)) F.getDocs(F.collection(db,"equipos",TEAM,"jugadas",j.id,"imgs")).then(sn=>{ if(PZ.abierta?.id!==j.id) return; sn.docs.forEach(d=>{ PZ.imgs[d.id]=d.data().data; PZ.imgsGuardadas.add(d.id); }); if(!PZ.anim) pzDraw(); }).catch(e=>console.warn(e)); }
+function pzReset(){ if(PZ.anim) pzPlay(); PZ.pasos=null; PZ.abierta=null; PZ.imgs={}; PZ.imgsGuardadas=new Set(); pzVidCerrar(); }
+async function pzComprimir(src){
+  let w,h,dib; if(src instanceof Blob){ dib=await createImageBitmap(src); w=dib.width; h=dib.height; } else { dib=src; w=src.videoWidth; h=src.videoHeight; }
+  if(!w||!h) throw new Error("imagen vacía");
+  const k=Math.min(1,1100/Math.max(w,h)), c=document.createElement("canvas"); c.width=Math.round(w*k); c.height=Math.round(h*k); c.getContext("2d").drawImage(dib,0,0,c.width,c.height);
+  let q=0.72, url=c.toDataURL("image/jpeg",q); while(url.length>650000 && q>0.3){ q-=0.12; url=c.toDataURL("image/jpeg",q); } return url; }
+// Pone la foto en el paso actual si no tiene; si ya tiene, crea un paso nuevo detrás con la foto
+function pzPasoConFoto(url){ const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); PZ.imgs[id]=url; const cur=pzCur();
+  if(!cur.img) cur.img=id; else { const nx=pzCopia(cur); nx.trazos=[]; nx.img=id; PZ.pasos.splice(PZ.i+1,0,nx); PZ.i++; } pzDraw(); }
+async function pzGuardarImgs(jid, todas){ const usadas=new Set(PZ.pasos.map(p=>p.img).filter(i=>i&&PZ.imgs[i]));
+  for(const i of usadas) if(todas||!PZ.imgsGuardadas.has(i)) await F.setDoc(F.doc(db,"equipos",TEAM,"jugadas",jid,"imgs",i),{data:PZ.imgs[i]});
+  if(!todas) for(const i of PZ.imgsGuardadas) if(!usadas.has(i)) await F.deleteDoc(F.doc(db,"equipos",TEAM,"jugadas",jid,"imgs",i)).catch(()=>{});
+  PZ.imgsGuardadas=usadas; }
+let pzVidUrl=null;
+function pzVidCerrar(){ const v=$("#pzVideo"); if(!v) return; v.pause(); v.removeAttribute("src"); v.load(); if(pzVidUrl){ URL.revokeObjectURL(pzVidUrl); pzVidUrl=null; } $("#pzVidBox").hidden=true; }
+function pzBuscar(v,t){ return new Promise(res=>{ let hecho=false; const ok=()=>{ if(hecho) return; hecho=true; v.removeEventListener("seeked",ok); setTimeout(res,60); }; v.addEventListener("seeked",ok); v.currentTime=Math.max(0,Math.min(t,(v.duration||0)-0.08)); setTimeout(ok,4000); }); }
+$("#pzFotoIn")?.addEventListener("change",async e=>{ const f=e.target.files?.[0]; e.target.value=""; if(!f) return; pzInit();
+  try{ pzPasoConFoto(await pzComprimir(f)); toast("Foto añadida al paso "+(PZ.i+1)+". Coloca las fichas encima"); }catch(err){ console.error(err); toast("No se pudo leer esa imagen. Prueba con un PNG o JPG."); } });
+$("#pzVideoIn")?.addEventListener("change",e=>{ const f=e.target.files?.[0]; e.target.value=""; if(!f) return; pzInit(); pzVidCerrar();
+  pzVidUrl=URL.createObjectURL(f); const v=$("#pzVideo"); v.src=pzVidUrl; $("#pzVidBox").hidden=false; $("#pzVidBox").scrollIntoView({behavior:"smooth",block:"start"}); });
+$("#pzFondo")?.addEventListener("change",e=>{ PZ.fondo=e.target.checked; pzDraw(); });
 $("#jugBuscar")?.addEventListener("input",()=>renderJugadas());
 const PZ_TIPOS={ataque:"Ataque",defensa:"Defensa",banda:"Saque de banda",fondo:"Saque de fondo",contra:"Contraataque",otra:"Otra"};
 function renderPizarra(){
   if(!$("#pzCanvas")) return;
   $("#pzGuardarRow").hidden=!S.canWrite;
-  $("#pzBorrar").hidden=!PZ.abierta;
+  $("#pzBorrar").hidden=!PZ.abierta; $("#pzCopiaBtn").hidden=!PZ.abierta; $("#pzMedia").hidden=!S.canWrite;
+  $("#pzGuardar").textContent=PZ.abierta?"💾 Guardar cambios":"💾 Guardar";
   $("#pzTitulo").textContent="🧠 "+(PZ.abierta?PZ.abierta.nombre:"Nueva jugada");
   const j=PZ.abierta&&(S.jugadas||[]).find(x=>x.id===PZ.abierta.id);
   $("#pzSub").textContent = j ? [PZ_TIPOS[j.tipo||"ataque"], (j.pasos?.length||1)+((j.pasos?.length||1)===1?" paso":" pasos"), shortName(j.autor)].filter(Boolean).join(" · ")
@@ -1734,7 +1766,7 @@ function renderJugadas(){
   const q=($("#jugBuscar").value||"").trim().toLowerCase();
   const vis=l.filter(j=>(!S.jugTipo||(j.tipo||"ataque")===S.jugTipo) && (!q||(j.nombre||"").toLowerCase().includes(q)));
   grid.innerHTML = vis.length ? vis.map(j=>{ const n=j.pasos?.length||1;
-    return `<button type="button" class="jug-card" data-pzver="${esc(j.id)}"><canvas width="600" height="560" data-thumb="${esc(j.id)}" aria-hidden="true"></canvas><b>${esc(j.nombre)}</b><span class="mini">${esc(PZ_TIPOS[j.tipo||"ataque"])} · ${n} ${n===1?"paso":"pasos"}</span></button>`; }).join("")
+    return `<button type="button" class="jug-card" data-pzver="${esc(j.id)}"><canvas width="600" height="560" data-thumb="${esc(j.id)}" aria-hidden="true"></canvas><b>${esc(j.nombre)}</b><span class="mini">${esc(PZ_TIPOS[j.tipo||"ataque"])} · ${n} ${n===1?"paso":"pasos"}${j.fotos?` · 📷 ${j.fotos}`:""}</span></button>`; }).join("")
     : `<div class="empty"><b>${l.length?"Ninguna coincide":"Todavía no hay jugadas"}</b>${l.length?"Prueba con otro tipo o nombre.":S.canWrite?"Pulsa «Nueva jugada» para crear la primera.":"Cuando el entrenador guarde una, aparecerá aquí."}</div>`;
   grid.querySelectorAll("canvas[data-thumb]").forEach(cv=>{ const j=l.find(x=>x.id===cv.dataset.thumb); if(!j) return;
     const st=j.pasos?.[0]||{fichas:j.fichas||[],trazos:(j.trazos||[]).map(x=>({k:"mov",p:x.p}))}; try{ pzDraw({fichas:st.fichas||[],trazos:st.trazos||[]},cv); }catch{} });
@@ -1779,8 +1811,8 @@ function traducir(root=document.body){
 }
 // Frases que cambian (números, nombres, fechas)
 const I18N_RE={
-  va:[[/^Debe (.+)$/,m=>"Deu "+m[1]],[/^Contesta antes de (.+)$/,m=>"Contesta abans de "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" multa":" multes")],[/^(\d+) jugadores$/,m=>m[1]+" jugadors"],[/^Jornada (\d+)$/,m=>"Jornada "+m[1]],[/^Guardado$/,()=>"Guardat"],[/^Hecho$/,()=>"Fet"],[/^Sin conexión.*$/,()=>"Sense connexió"],[/^(\d+) van?$/,m=>m[1]+" van"],[/^(\d+) no van?$/,m=>m[1]+" no van"],[/^Paso (\d+) de (\d+)$/,m=>`Pas ${m[1]} de ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Jugada guardada (${m[1]} ${m[1]==="1"?"pas":"passos"})`],[/^Jugada: (.+)$/,m=>"Jugada: "+m[1]],[/^Última: (.+)$/,m=>"Última: "+m[1]],[/^(\d+) más$/,m=>m[1]+" més"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" jugada":" jugades")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Atac","Saque de banda":"Fora de banda","Saque de fondo":"Fora de fons","Contraataque":"Contraatac","Otra":"Altra"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" pas":" passos")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" pas":" passos")+(m[2]||"")]],
-  en:[[/^Debe (.+)$/,m=>"Owes "+m[1]],[/^Contesta antes de (.+)$/,m=>"Answer before "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" fine":" fines")],[/^(\d+) jugadores$/,m=>m[1]+" players"],[/^Jornada (\d+)$/,m=>"Round "+m[1]],[/^Guardado$/,()=>"Saved"],[/^Hecho$/,()=>"Done"],[/^Sin conexión.*$/,()=>"Offline"],[/^(\d+) van?$/,m=>m[1]+" going"],[/^(\d+) no van?$/,m=>m[1]+" not going"],[/^Paso (\d+) de (\d+)$/,m=>`Step ${m[1]} of ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Play saved (${m[1]} ${m[1]==="1"?"step":"steps"})`],[/^Jugada: (.+)$/,m=>"Play: "+m[1]],[/^Última: (.+)$/,m=>"Last: "+m[1]],[/^(\d+) más$/,m=>m[1]+" more"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" play":" plays")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Offense","Defensa":"Defense","Saque de banda":"Sideline inbound","Saque de fondo":"Baseline inbound","Contraataque":"Fast break","Otra":"Other"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" step":" steps")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" step":" steps")+(m[2]||"")]]
+  va:[[/^Debe (.+)$/,m=>"Deu "+m[1]],[/^Contesta antes de (.+)$/,m=>"Contesta abans de "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" multa":" multes")],[/^(\d+) jugadores$/,m=>m[1]+" jugadors"],[/^Jornada (\d+)$/,m=>"Jornada "+m[1]],[/^Guardado$/,()=>"Guardat"],[/^Hecho$/,()=>"Fet"],[/^Sin conexión.*$/,()=>"Sense connexió"],[/^(\d+) van?$/,m=>m[1]+" van"],[/^(\d+) no van?$/,m=>m[1]+" no van"],[/^Paso (\d+) de (\d+)$/,m=>`Pas ${m[1]} de ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Jugada guardada (${m[1]} ${m[1]==="1"?"pas":"passos"})`],[/^Jugada: (.+)$/,m=>"Jugada: "+m[1]],[/^Última: (.+)$/,m=>"Última: "+m[1]],[/^Foto del paso (\d+)$/,m=>"Foto del pas "+m[1]],[/^Foto añadida al paso (\d+)\. Coloca las fichas encima$/,m=>`Foto afegida al pas ${m[1]}. Col·loca les fitxes damunt`],[/^Paso (\d+) con la foto del vídeo$/,m=>`Pas ${m[1]} amb la foto del vídeo`],[/^Vídeo partido en (\d+) pasos\. Coloca las fichas en cada uno$/,m=>`Vídeo partit en ${m[1]} passos. Col·loca les fitxes en cada un`],[/^(\d+) más$/,m=>m[1]+" més"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" jugada":" jugades")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Atac","Saque de banda":"Fora de banda","Saque de fondo":"Fora de fons","Contraataque":"Contraatac","Otra":"Altra"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" pas":" passos")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" pas":" passos")+(m[2]||"")]],
+  en:[[/^Debe (.+)$/,m=>"Owes "+m[1]],[/^Contesta antes de (.+)$/,m=>"Answer before "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" fine":" fines")],[/^(\d+) jugadores$/,m=>m[1]+" players"],[/^Jornada (\d+)$/,m=>"Round "+m[1]],[/^Guardado$/,()=>"Saved"],[/^Hecho$/,()=>"Done"],[/^Sin conexión.*$/,()=>"Offline"],[/^(\d+) van?$/,m=>m[1]+" going"],[/^(\d+) no van?$/,m=>m[1]+" not going"],[/^Paso (\d+) de (\d+)$/,m=>`Step ${m[1]} of ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Play saved (${m[1]} ${m[1]==="1"?"step":"steps"})`],[/^Jugada: (.+)$/,m=>"Play: "+m[1]],[/^Última: (.+)$/,m=>"Last: "+m[1]],[/^Foto del paso (\d+)$/,m=>"Step "+m[1]+" photo"],[/^Foto añadida al paso (\d+)\. Coloca las fichas encima$/,m=>`Photo added to step ${m[1]}. Place the pieces on top`],[/^Paso (\d+) con la foto del vídeo$/,m=>`Step ${m[1]} with the video frame`],[/^Vídeo partido en (\d+) pasos\. Coloca las fichas en cada uno$/,m=>`Video split into ${m[1]} steps. Place the pieces on each`],[/^(\d+) más$/,m=>m[1]+" more"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" play":" plays")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Offense","Defensa":"Defense","Saque de banda":"Sideline inbound","Saque de fondo":"Baseline inbound","Contraataque":"Fast break","Otra":"Other"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" step":" steps")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" step":" steps")+(m[2]||"")]]
 };
 const obsI18n=new MutationObserver(ms=>{ if(traducir&&!traduciendo&&lang!=="es") ms.forEach(m=>{ if(m.type==="characterData") traducir(m.target); else m.addedNodes.forEach(nd=>{ if(nd.nodeType===1||nd.nodeType===3) traducir(nd); }); }); });
 obsI18n.observe(document.body,{childList:true,subtree:true,characterData:true});
@@ -1802,20 +1834,28 @@ function handleTanda2(t,d){
   if(t.id==="fbcvHecho"){ const hoy=new Date(); const ymd=hoy.getFullYear()+"-"+String(hoy.getMonth()+1).padStart(2,"0")+"-"+String(hoy.getDate()).padStart(2,"0");
     run(()=>F.updateDoc(F.doc(db,"equipos",LEGACY_TEAM),{fbcvRenovado:ymd}),"Hecho. No te llegarán más recordatorios esta semana").then(()=>fbcvFecha()); return true; }
   if(t.id==="pzDeshacer"){ if(PZ.anim) return true; pzCur().trazos.pop(); pzDraw(); return true; }
-  if(t.id==="pzLimpiar"){ armed(t,"⚠️ ¿Borrar toda la pizarra? Pulsa otra vez",()=>{ if(PZ.anim) pzPlay(); PZ.pasos=null; PZ.abierta=null; $("#pzNombre").value=""; pzInit(); toast("Pizarra vacía"); }); return true; }
+  if(t.id==="pzLimpiar"){ armed(t,"⚠️ ¿Borrar toda la pizarra? Pulsa otra vez",()=>{ if(PZ.anim) pzPlay(); pzReset(); $("#pzNombre").value=""; pzInit(); renderPizarra(); toast("Pizarra vacía"); }); return true; }
+  if(t.id==="pzVidCerrar"){ pzVidCerrar(); return true; }
+  if(t.id==="pzVidFoto"){ const v=$("#pzVideo"); v.pause(); pzComprimir(v).then(u=>{ pzPasoConFoto(u); toast("Paso "+(PZ.i+1)+" con la foto del vídeo"); }).catch(()=>toast("Espera a que cargue el vídeo")); return true; }
+  if(t.id==="pzVidPartir"){ const v=$("#pzVideo"), n=+$("#pzPartes").value||4; if(!v.duration){ toast("Espera a que cargue el vídeo"); return true; }
+    t.disabled=true; v.pause(); (async()=>{ try{ for(let k=0;k<n;k++){ await pzBuscar(v, v.duration*k/(n-1)); pzPasoConFoto(await pzComprimir(v)); } toast(`Vídeo partido en ${n} pasos. Coloca las fichas en cada uno`); }
+      catch(err){ console.error(err); toast("No se pudo partir el vídeo"); } t.disabled=false; PZ.i=Math.max(0,PZ.i-n+1); pzDraw(); $("#pzCanvas").scrollIntoView({behavior:"smooth",block:"center"}); })(); return true; }
+  if(t.id==="pzFotoQuitar"){ delete pzCur().img; pzDraw(); return true; }
   if(t.id==="pzNuevo"){ if(!PZ.anim) pzNuevoPaso(); return true; }
   if(t.id==="pzAnt"){ if(PZ.i>0){ PZ.i--; pzDraw(); } return true; }
   if(t.id==="pzSig"){ if(PZ.i<PZ.pasos.length-1){ PZ.i++; pzDraw(); } return true; }
   if(t.id==="pzQuitar"){ if(PZ.pasos.length>1){ armed(t,"¿Quitar este paso?",()=>{ PZ.pasos.splice(PZ.i,1); PZ.i=Math.min(PZ.i,PZ.pasos.length-1); pzDraw(); }); } return true; }
   if(t.id==="pzPlay"){ pzPlay(); return true; }
   if(d.jugtipo!==undefined){ S.jugTipo=d.jugtipo; renderJugadas(); return true; }
-  if(t.id==="jugNueva"){ if(PZ.anim) pzPlay(); PZ.pasos=null; PZ.abierta=null; $("#pzNombre").value=""; $("#pzTipo").value="ataque"; location.hash="#pizarra"; return true; }
-  if(d.pzver){ const j=(S.jugadas||[]).find(x=>x.id===d.pzver); if(j){ if(PZ.anim) pzPlay(); pzCargar(j); $("#pzNombre").value=j.nombre||""; $("#pzTipo").value=j.tipo||"ataque"; if(location.hash==="#pizarra"){ pzDraw(); renderPizarra(); } else location.hash="#pizarra"; } return true; }
-  if(t.id==="pzBorrar"){ if(PZ.abierta){ const id=PZ.abierta.id; armed(t,"¿Borrar? Toca otra vez",()=>run(()=>F.deleteDoc(F.doc(col("jugadas"),id)),"Jugada borrada").then(()=>{ PZ.pasos=null; PZ.abierta=null; location.hash="#jugadas"; })); } return true; }
-  if(t.id==="pzGuardar"){ const nombre=$("#pzNombre").value.trim(); if(!nombre){ toast("Ponle un nombre a la jugada"); return true; }
-    const datos={nombre, tipo:$("#pzTipo").value||"ataque", pasos:pzDatos(), autor:myName(), creado:Date.now()};
-    const misma=PZ.abierta && PZ.abierta.nombre===nombre;
-    run(()=>misma?F.setDoc(F.doc(col("jugadas"),PZ.abierta.id),datos):F.addDoc(col("jugadas"),datos).then(r=>{ PZ.abierta={id:r.id,nombre}; renderPizarra(); return r; }), misma?"Jugada actualizada":`Jugada guardada (${PZ.pasos.length} ${PZ.pasos.length===1?"paso":"pasos"})`); return true; }
+  if(t.id==="jugNueva"){ pzReset(); $("#pzNombre").value=""; $("#pzTipo").value="ataque"; location.hash="#pizarra"; return true; }
+  if(d.pzver){ const j=(S.jugadas||[]).find(x=>x.id===d.pzver); if(j){ pzReset(); pzCargar(j); $("#pzNombre").value=j.nombre||""; $("#pzTipo").value=j.tipo||"ataque"; if(location.hash==="#pizarra"){ pzDraw(); renderPizarra(); } else location.hash="#pizarra"; } return true; }
+  if(t.id==="pzBorrar"){ if(PZ.abierta){ const id=PZ.abierta.id, imgs=[...PZ.imgsGuardadas]; armed(t,"¿Borrar? Toca otra vez",()=>run(async()=>{ for(const i of imgs) await F.deleteDoc(F.doc(db,"equipos",TEAM,"jugadas",id,"imgs",i)).catch(()=>{}); await F.deleteDoc(F.doc(col("jugadas"),id)); },"Jugada borrada").then(()=>{ pzReset(); location.hash="#jugadas"; })); } return true; }
+  if(t.id==="pzGuardar"||t.id==="pzCopiaBtn"){ const nombre=$("#pzNombre").value.trim(); if(!nombre){ toast("Ponle un nombre a la jugada"); return true; }
+    const copia=t.id==="pzCopiaBtn"||!PZ.abierta; const ant=!copia&&(S.jugadas||[]).find(x=>x.id===PZ.abierta.id);
+    const datos={nombre, tipo:$("#pzTipo").value||"ataque", pasos:pzDatos(), fotos:PZ.pasos.filter(p=>p.img&&PZ.imgs[p.img]).length, autor:ant?.autor||myName(), creado:ant?.creado||Date.now(), editado:Date.now()};
+    const n=PZ.pasos.length; t.disabled=true;
+    run(async()=>{ let id; if(copia){ id=(await F.addDoc(col("jugadas"),datos)).id; } else { id=PZ.abierta.id; await F.setDoc(F.doc(col("jugadas"),id),datos); }
+      await pzGuardarImgs(id, copia); PZ.abierta={id,nombre}; renderPizarra(); }, copia?`Jugada guardada (${n} ${n===1?"paso":"pasos"})`:"Cambios guardados").finally(()=>{ t.disabled=false; }); return true; }
   if(d.pzabrir){ const j=(S.jugadas||[]).find(x=>x.id===d.pzabrir); if(j){ if(PZ.anim) pzPlay(); pzCargar(j); $("#pzNombre").value=j.nombre||""; pzDraw(); window.scrollTo({top:0,behavior:"smooth"}); toast("Jugada: "+j.nombre); } return true; }
   if(d.pzdel){ armed(t,"¿Borrar?",()=>run(()=>F.deleteDoc(F.doc(col("jugadas"),d.pzdel)),"Jugada borrada")); return true; }
   return false;
