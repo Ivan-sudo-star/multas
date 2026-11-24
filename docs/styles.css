@@ -359,3 +359,11 @@ html.grande body{zoom:1.12}
 .pzpasos{align-items:center;gap:6px}
 .pzpasos #pzPaso{min-width:90px;text-align:center}
 .pzpasos .btn:disabled{opacity:.4}
+.jug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.jug-card{display:flex;flex-direction:column;align-items:stretch;gap:3px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px 6px 10px;cursor:pointer;color:var(--ink);font:inherit}
+.jug-card canvas{width:100%;height:auto;border-radius:9px;display:block;margin-bottom:4px}
+.jug-card b{font-size:14px;padding:0 4px;line-height:1.25}
+.jug-card .mini{padding:0 4px}
+.jug-card:active{transform:scale(.98)}
+.jug-card:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.jug-grid .empty{grid-column:1/-1}

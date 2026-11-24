@@ -112,7 +112,7 @@ const isNew = m => (m.creado||0) > S.lastSeen && m.autor !== (S.user&&S.user.uid
 function totals(list){ let t=0,p=0; list.forEach(m=>{ t+=+m.importe||0; if(!m.pagada) p+=+m.importe||0; }); return {t, p, c:t-p}; }
 
 /* ---------- navegación ---------- */
-const VIEWS=["resumen","asistencia","anadir","planes","historial","equipo","ajustes","scouting","ayuda","fantasy","ficha","pizarra"];
+const VIEWS=["resumen","asistencia","anadir","planes","historial","equipo","ajustes","scouting","ayuda","fantasy","ficha","pizarra","jugadas"];
 function route(){
   document.querySelector("nav.tabs").hidden = !teamOpen; $(".pot").hidden = !teamOpen;
   if(!teamOpen){ document.querySelectorAll(".view").forEach(el=>{ el.hidden = el.id !== "v-inicio"; }); window.scrollTo(0,0); return; }
@@ -122,6 +122,7 @@ function route(){
   if(v==="historial"){ renderHist(); markSeenSoon(); }
   if(v==="ficha") renderFicha();
   if(v==="pizarra"){ pzInit(); renderPizarra(); }
+  if(v==="jugadas") renderJugadas();
   if(v==="scouting") cargarFBCV();
   if(lang!=="es") setTimeout(()=>traducir(),50);
   window.scrollTo(0,0);
@@ -1175,7 +1176,7 @@ async function initSugerencias(){
   if(!S.user || !email()) { $("#sugAdmin").hidden=true; return; }
   try{ if(appOwner===null){ const t=await F.getDoc(F.doc(db,"equipos",LEGACY_TEAM)); appOwner=String(t.data()?.propietario||"").toLowerCase(); } }catch{ appOwner=""; }
   const soy = appOwner && appOwner===email();
-  $("#sugAdmin").hidden=!soy; $("#fbcvCard").hidden=!soy;
+  $("#sugAdmin").hidden=!soy; $("#fbcvRenCard").hidden=!soy;
   if(soy) fbcvFecha();
   if(soy && !sugUnsub){
     sugUnsub=F.onSnapshot(F.collection(db,"sugerencias"), s=>{
@@ -1618,8 +1619,8 @@ function pzCadena(st,f,c){ let t=st.trazos.find(u=>{ const p=pzPadre(st,u,c); re
   const pts=[...t.p], vistos=new Set([t]);
   for(;;){ const sig=st.trazos.find(u=>!vistos.has(u)&&pzPadre(st,u,c)?.t===t); if(!sig) break; vistos.add(sig); pts.push(...sig.p.slice(2)); t=sig; }
   return pts; }
-function pzDraw(st){
-  const c=$("#pzCanvas"); if(!c||!PZ.pasos) return; st=st||pzCur(); const g=c.getContext("2d"); const W=c.width,H=c.height;
+function pzDraw(st,cv){
+  const main=!cv; const c=cv||$("#pzCanvas"); if(!c||(main&&!PZ.pasos)) return; st=st||pzCur(); const g=c.getContext("2d"); const W=c.width,H=c.height;
   const css=getComputedStyle(document.documentElement); const lin=css.getPropertyValue("--muted").trim()||"#888"; const ink=css.getPropertyValue("--ink").trim()||"#17173d";
   g.setLineDash([]); g.globalAlpha=1; PZ_DEF=css.getPropertyValue("--pz-def").trim()||"#29297a";
   g.clearRect(0,0,W,H); g.fillStyle=css.getPropertyValue("--orange-soft").trim()||"#fde7de"; g.fillRect(0,0,W,H);
@@ -1655,10 +1656,11 @@ function pzDraw(st){
       g.fillStyle="#fff"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(txt,lx,ly+1); }
     g.restore(); };
   // Paso anterior en transparente, para ver de dónde viene cada uno
-  if(!PZ.anim && PZ.i>0 && st===pzCur()){ g.globalAlpha=0.22; PZ.pasos[PZ.i-1].fichas.forEach(f=>pzFicha(g,f,W,H)); g.globalAlpha=1; }
+  if(main && !PZ.anim && PZ.i>0 && st===pzCur()){ g.globalAlpha=0.22; PZ.pasos[PZ.i-1].fichas.forEach(f=>pzFicha(g,f,W,H)); g.globalAlpha=1; }
   g.strokeStyle=g.fillStyle=ink; g.lineWidth=4; g.lineCap="round"; g.lineJoin="round";
-  if(!PZ.anim||PZ.anim.pausa){ st.trazos.forEach(flecha); if(PZ.trazo) flecha(PZ.trazo); }
+  if(!main||!PZ.anim||PZ.anim.pausa){ st.trazos.forEach(flecha); if(main&&PZ.trazo) flecha(PZ.trazo); }
   st.fichas.filter(f=>f.t!=="b").forEach(f=>pzFicha(g,f,W,H)); st.fichas.filter(f=>f.t==="b").forEach(f=>pzFicha(g,f,W,H));
+  if(!main) return;
   const tx=$("#pzPaso"); if(tx) tx.textContent=`Paso ${PZ.i+1} de ${PZ.pasos.length}`;
   const ant=$("#pzAnt"), sig=$("#pzSig"), qu=$("#pzQuitar"); if(ant){ ant.disabled=PZ.i===0||!!PZ.anim; sig.disabled=PZ.i>=PZ.pasos.length-1||!!PZ.anim; qu.disabled=PZ.pasos.length<2||!!PZ.anim; }
   const pl=$("#pzPlay"); if(pl){ pl.textContent=PZ.anim?"⏹ Parar":"▶️ Reproducir"; pl.disabled=PZ.pasos.length<2 && !PZ.anim; }
@@ -1707,11 +1709,34 @@ function pzPos(e){ const c=$("#pzCanvas"), r=c.getBoundingClientRect(); return {
 function pzDatos(){ return PZ.pasos.map(st=>({fichas:st.fichas.map(f=>({t:f.t,n:f.n,x:+(+f.x).toFixed(3),y:+(+f.y).toFixed(3)})), trazos:st.trazos.map(t=>({k:t.k||"mov",p:t.p}))})); }
 function pzCargar(j){ const pasos=j.pasos?.length?j.pasos:[{fichas:j.fichas||[],trazos:(j.trazos||[]).map(x=>({k:"mov",p:x.p}))}];
   PZ.pasos=pasos.map(st=>{ const c=pzCopia({fichas:st.fichas||[],trazos:st.trazos||[]}); if(!c.fichas.some(f=>f.t==="b")) c.fichas.push({t:"b",n:0,x:0.53,y:0.6}); return c; }); PZ.i=0; PZ.abierta={id:j.id,nombre:j.nombre}; }
+$("#jugBuscar")?.addEventListener("input",()=>renderJugadas());
+const PZ_TIPOS={ataque:"Ataque",defensa:"Defensa",banda:"Saque de banda",fondo:"Saque de fondo",contra:"Contraataque",otra:"Otra"};
 function renderPizarra(){
-  if(!$("#pzLista")) return;
+  if(!$("#pzCanvas")) return;
   $("#pzGuardarRow").hidden=!S.canWrite;
-  const l=[...(S.jugadas||[])].sort((a,b)=>(b.creado||0)-(a.creado||0));
-  $("#pzLista").innerHTML = l.length ? l.map(j=>`<li class="gasto"><span><b>${esc(j.nombre)}</b> <span class="mini">· ${j.pasos?.length||1} ${(j.pasos?.length||1)===1?"paso":"pasos"} · ${esc(shortName(j.autor))}</span></span><span class="row"><button type="button" class="btn small" data-pzabrir="${esc(j.id)}">Abrir</button>${S.canWrite?`<button type="button" class="btn small danger" data-pzdel="${esc(j.id)}">✕</button>`:""}</span></li>`).join("") : '<li class="note">Todavía no hay jugadas guardadas.</li>';
+  $("#pzBorrar").hidden=!PZ.abierta;
+  $("#pzTitulo").textContent="🧠 "+(PZ.abierta?PZ.abierta.nombre:"Nueva jugada");
+  const j=PZ.abierta&&(S.jugadas||[]).find(x=>x.id===PZ.abierta.id);
+  $("#pzSub").textContent = j ? [PZ_TIPOS[j.tipo||"ataque"], (j.pasos?.length||1)+((j.pasos?.length||1)===1?" paso":" pasos"), shortName(j.autor)].filter(Boolean).join(" · ")
+    : "Monta la jugada por pasos: coloca las fichas, dibuja lo que pasa y pulsa «Siguiente paso». Con «Reproducir» se ve entera.";
+  renderJugadas();
+}
+function renderJugadas(){
+  const l=[...(S.jugadas||[])].sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"));
+  const jc=$("#jugCount"); if(jc) jc.textContent=l.length?"("+l.length+")":"";
+  const grid=$("#jugGrid"); if(!grid) return;
+  $("#jugNueva").hidden=!S.canWrite;
+  const cuenta={}; l.forEach(j=>{ const t=j.tipo||"ataque"; cuenta[t]=(cuenta[t]||0)+1; });
+  if(S.jugTipo && !cuenta[S.jugTipo]) S.jugTipo="";
+  $("#jugTipos").innerHTML = l.length ? [["","Todas",l.length],...Object.keys(PZ_TIPOS).filter(t=>cuenta[t]).map(t=>[t,PZ_TIPOS[t],cuenta[t]])]
+    .map(([t,n,c])=>`<button type="button" class="rivchip" role="tab" aria-pressed="${(S.jugTipo||"")===t}" data-jugtipo="${t}"><b>${esc(n)}</b><span>${c} ${c===1?"jugada":"jugadas"}</span></button>`).join("") : "";
+  const q=($("#jugBuscar").value||"").trim().toLowerCase();
+  const vis=l.filter(j=>(!S.jugTipo||(j.tipo||"ataque")===S.jugTipo) && (!q||(j.nombre||"").toLowerCase().includes(q)));
+  grid.innerHTML = vis.length ? vis.map(j=>{ const n=j.pasos?.length||1;
+    return `<button type="button" class="jug-card" data-pzver="${esc(j.id)}"><canvas width="600" height="560" data-thumb="${esc(j.id)}" aria-hidden="true"></canvas><b>${esc(j.nombre)}</b><span class="mini">${esc(PZ_TIPOS[j.tipo||"ataque"])} · ${n} ${n===1?"paso":"pasos"}</span></button>`; }).join("")
+    : `<div class="empty"><b>${l.length?"Ninguna coincide":"Todavía no hay jugadas"}</b>${l.length?"Prueba con otro tipo o nombre.":S.canWrite?"Pulsa «Nueva jugada» para crear la primera.":"Cuando el entrenador guarde una, aparecerá aquí."}</div>`;
+  grid.querySelectorAll("canvas[data-thumb]").forEach(cv=>{ const j=l.find(x=>x.id===cv.dataset.thumb); if(!j) return;
+    const st=j.pasos?.[0]||{fichas:j.fichas||[],trazos:(j.trazos||[]).map(x=>({k:"mov",p:x.p}))}; try{ pzDraw({fichas:st.fichas||[],trazos:st.trazos||[]},cv); }catch{} });
 }
 // Idiomas: traducción de los textos fijos de la app (menús, títulos y botones)
 const I18N={
@@ -1726,6 +1751,7 @@ function trTexto(o,dic){
   const k=o.trim(); if(!k) return null;
   const [pre,limpio]=claveI(k); let tr=dic[limpio];
   if(!tr && /[.:]$/.test(limpio)){ const b=dic[limpio.slice(0,-1)]; if(b) tr=b+limpio.slice(-1); }
+  if(!tr){ const full=normI(k); for(const [re,f] of (I18N_RE[lang]||[])){ const m=full.match(re); if(m) return o.replace(k, f(m)); } }
   if(!tr) for(const [re,f] of (I18N_RE[lang]||[])){ const m=limpio.match(re); if(m){ tr=f(m); break; } }
   if(!tr) return null;
   return o.replace(k, pre.replace(/[¿¡]/g,"")+tr);
@@ -1752,8 +1778,8 @@ function traducir(root=document.body){
 }
 // Frases que cambian (números, nombres, fechas)
 const I18N_RE={
-  va:[[/^Debe (.+)$/,m=>"Deu "+m[1]],[/^Contesta antes de (.+)$/,m=>"Contesta abans de "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" multa":" multes")],[/^(\d+) jugadores$/,m=>m[1]+" jugadors"],[/^Jornada (\d+)$/,m=>"Jornada "+m[1]],[/^Guardado$/,()=>"Guardat"],[/^Hecho$/,()=>"Fet"],[/^Sin conexión.*$/,()=>"Sense connexió"],[/^(\d+) van?$/,m=>m[1]+" van"],[/^(\d+) no van?$/,m=>m[1]+" no van"],[/^Paso (\d+) de (\d+)$/,m=>`Pas ${m[1]} de ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Jugada guardada (${m[1]} ${m[1]==="1"?"pas":"passos"})`],[/^Jugada: (.+)$/,m=>"Jugada: "+m[1]],[/^Última: (.+)$/,m=>"Última: "+m[1]],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" pas":" passos")+(m[2]||"")]],
-  en:[[/^Debe (.+)$/,m=>"Owes "+m[1]],[/^Contesta antes de (.+)$/,m=>"Answer before "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" fine":" fines")],[/^(\d+) jugadores$/,m=>m[1]+" players"],[/^Jornada (\d+)$/,m=>"Round "+m[1]],[/^Guardado$/,()=>"Saved"],[/^Hecho$/,()=>"Done"],[/^Sin conexión.*$/,()=>"Offline"],[/^(\d+) van?$/,m=>m[1]+" going"],[/^(\d+) no van?$/,m=>m[1]+" not going"],[/^Paso (\d+) de (\d+)$/,m=>`Step ${m[1]} of ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Play saved (${m[1]} ${m[1]==="1"?"step":"steps"})`],[/^Jugada: (.+)$/,m=>"Play: "+m[1]],[/^Última: (.+)$/,m=>"Last: "+m[1]],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" step":" steps")+(m[2]||"")]]
+  va:[[/^Debe (.+)$/,m=>"Deu "+m[1]],[/^Contesta antes de (.+)$/,m=>"Contesta abans de "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" multa":" multes")],[/^(\d+) jugadores$/,m=>m[1]+" jugadors"],[/^Jornada (\d+)$/,m=>"Jornada "+m[1]],[/^Guardado$/,()=>"Guardat"],[/^Hecho$/,()=>"Fet"],[/^Sin conexión.*$/,()=>"Sense connexió"],[/^(\d+) van?$/,m=>m[1]+" van"],[/^(\d+) no van?$/,m=>m[1]+" no van"],[/^Paso (\d+) de (\d+)$/,m=>`Pas ${m[1]} de ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Jugada guardada (${m[1]} ${m[1]==="1"?"pas":"passos"})`],[/^Jugada: (.+)$/,m=>"Jugada: "+m[1]],[/^Última: (.+)$/,m=>"Última: "+m[1]],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" jugada":" jugades")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Atac","Saque de banda":"Fora de banda","Saque de fondo":"Fora de fons","Contraataque":"Contraatac","Otra":"Altra"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" pas":" passos")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" pas":" passos")+(m[2]||"")]],
+  en:[[/^Debe (.+)$/,m=>"Owes "+m[1]],[/^Contesta antes de (.+)$/,m=>"Answer before "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" fine":" fines")],[/^(\d+) jugadores$/,m=>m[1]+" players"],[/^Jornada (\d+)$/,m=>"Round "+m[1]],[/^Guardado$/,()=>"Saved"],[/^Hecho$/,()=>"Done"],[/^Sin conexión.*$/,()=>"Offline"],[/^(\d+) van?$/,m=>m[1]+" going"],[/^(\d+) no van?$/,m=>m[1]+" not going"],[/^Paso (\d+) de (\d+)$/,m=>`Step ${m[1]} of ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Play saved (${m[1]} ${m[1]==="1"?"step":"steps"})`],[/^Jugada: (.+)$/,m=>"Play: "+m[1]],[/^Última: (.+)$/,m=>"Last: "+m[1]],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" play":" plays")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Offense","Defensa":"Defense","Saque de banda":"Sideline inbound","Saque de fondo":"Baseline inbound","Contraataque":"Fast break","Otra":"Other"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" step":" steps")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" step":" steps")+(m[2]||"")]]
 };
 const obsI18n=new MutationObserver(ms=>{ if(traducir&&!traduciendo&&lang!=="es") ms.forEach(m=>{ if(m.type==="characterData") traducir(m.target); else m.addedNodes.forEach(nd=>{ if(nd.nodeType===1||nd.nodeType===3) traducir(nd); }); }); });
 obsI18n.observe(document.body,{childList:true,subtree:true,characterData:true});
@@ -1781,10 +1807,14 @@ function handleTanda2(t,d){
   if(t.id==="pzSig"){ if(PZ.i<PZ.pasos.length-1){ PZ.i++; pzDraw(); } return true; }
   if(t.id==="pzQuitar"){ if(PZ.pasos.length>1){ armed(t,"¿Quitar este paso?",()=>{ PZ.pasos.splice(PZ.i,1); PZ.i=Math.min(PZ.i,PZ.pasos.length-1); pzDraw(); }); } return true; }
   if(t.id==="pzPlay"){ pzPlay(); return true; }
+  if(d.jugtipo!==undefined){ S.jugTipo=d.jugtipo; renderJugadas(); return true; }
+  if(t.id==="jugNueva"){ if(PZ.anim) pzPlay(); PZ.pasos=null; PZ.abierta=null; $("#pzNombre").value=""; $("#pzTipo").value="ataque"; location.hash="#pizarra"; return true; }
+  if(d.pzver){ const j=(S.jugadas||[]).find(x=>x.id===d.pzver); if(j){ if(PZ.anim) pzPlay(); pzCargar(j); $("#pzNombre").value=j.nombre||""; $("#pzTipo").value=j.tipo||"ataque"; if(location.hash==="#pizarra"){ pzDraw(); renderPizarra(); } else location.hash="#pizarra"; } return true; }
+  if(t.id==="pzBorrar"){ if(PZ.abierta){ const id=PZ.abierta.id; armed(t,"¿Borrar? Toca otra vez",()=>run(()=>F.deleteDoc(F.doc(col("jugadas"),id)),"Jugada borrada").then(()=>{ PZ.pasos=null; PZ.abierta=null; location.hash="#jugadas"; })); } return true; }
   if(t.id==="pzGuardar"){ const nombre=$("#pzNombre").value.trim(); if(!nombre){ toast("Ponle un nombre a la jugada"); return true; }
-    const datos={nombre, pasos:pzDatos(), autor:myName(), creado:Date.now()};
+    const datos={nombre, tipo:$("#pzTipo").value||"ataque", pasos:pzDatos(), autor:myName(), creado:Date.now()};
     const misma=PZ.abierta && PZ.abierta.nombre===nombre;
-    run(()=>misma?F.setDoc(F.doc(col("jugadas"),PZ.abierta.id),datos):F.addDoc(col("jugadas"),datos).then(r=>{ PZ.abierta={id:r.id,nombre}; return r; }), misma?"Jugada actualizada":`Jugada guardada (${PZ.pasos.length} ${PZ.pasos.length===1?"paso":"pasos"})`); return true; }
+    run(()=>misma?F.setDoc(F.doc(col("jugadas"),PZ.abierta.id),datos):F.addDoc(col("jugadas"),datos).then(r=>{ PZ.abierta={id:r.id,nombre}; renderPizarra(); return r; }), misma?"Jugada actualizada":`Jugada guardada (${PZ.pasos.length} ${PZ.pasos.length===1?"paso":"pasos"})`); return true; }
   if(d.pzabrir){ const j=(S.jugadas||[]).find(x=>x.id===d.pzabrir); if(j){ if(PZ.anim) pzPlay(); pzCargar(j); $("#pzNombre").value=j.nombre||""; pzDraw(); window.scrollTo({top:0,behavior:"smooth"}); toast("Jugada: "+j.nombre); } return true; }
   if(d.pzdel){ armed(t,"¿Borrar?",()=>run(()=>F.deleteDoc(F.doc(col("jugadas"),d.pzdel)),"Jugada borrada")); return true; }
   return false;
