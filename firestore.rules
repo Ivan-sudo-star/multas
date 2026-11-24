@@ -120,16 +120,7 @@ service cloud.firestore {
 
       // Gastos del bote, registro de cambios y recordatorios de pago: los escriben los administradores
       match /gastos/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
-      match /jugadas/{id} {
-        allow read: if signedIn();
-        allow write: if isAdminOf(e);
-        // Fotos de cada paso de la jugada (una por documento, comprimidas)
-        match /imgs/{img} {
-          allow read: if signedIn();
-          allow create, update: if isAdminOf(e) && request.resource.data.data is string && request.resource.data.data.size() < 900000;
-          allow delete: if isAdminOf(e);
-        }
-      }
+      match /jugadas/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
       match /registro/{id} { allow read: if signedIn(); allow create: if isAdminOf(e); allow update, delete: if false; }
       match /recordatorios/{id} { allow read, create: if isAdminOf(e); allow update, delete: if false; }
 

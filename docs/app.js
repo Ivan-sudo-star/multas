@@ -1746,7 +1746,7 @@ const PZ_TIPOS={ataque:"Ataque",defensa:"Defensa",banda:"Saque de banda",fondo:"
 function renderPizarra(){
   if(!$("#pzCanvas")) return;
   $("#pzGuardarRow").hidden=!S.canWrite;
-  $("#pzBorrar").hidden=!PZ.abierta; $("#pzCopiaBtn").hidden=!PZ.abierta; $("#pzMedia").hidden=!S.canWrite;
+  $("#pzBorrar").hidden=!PZ.abierta; $("#pzCopiaBtn").hidden=!PZ.abierta;
   $("#pzGuardar").textContent=PZ.abierta?"💾 Guardar cambios":"💾 Guardar";
   $("#pzTitulo").textContent="🧠 "+(PZ.abierta?PZ.abierta.nombre:"Nueva jugada");
   const j=PZ.abierta&&(S.jugadas||[]).find(x=>x.id===PZ.abierta.id);
