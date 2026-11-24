@@ -294,3 +294,24 @@ details.past summary{list-style:none;cursor:pointer;display:flex;justify-content
 details.past summary::-webkit-details-marker{display:none}
 details.past summary h3::before{content:"▸ ";color:var(--muted)}
 details.past[open] summary h3::before{content:"▾ "}
+
+/* Tanda 1 de mejoras */
+.chartbox{width:100%;overflow:hidden}
+.chartbox svg{display:block;width:100%;height:auto}
+.chartbox .ax{fill:var(--muted);font-size:11px;font-family:var(--body)}
+.chartbox .val{fill:var(--ink);font-size:12px;font-weight:700;font-family:var(--body)}
+.chartbox .base{stroke:var(--line);stroke-width:1}
+.chartbox .bar{fill:var(--navy)}
+.chartbox .bar.now{fill:var(--orange)}
+.chartbox .hit{fill:transparent}
+.chartbox .hit:hover + .bar,.chartbox g:hover .bar{opacity:.85}
+.pg{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.pg:last-child{border-bottom:0}
+.pg .acc{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.logi{font-size:13px;padding:6px 0;border-bottom:1px solid var(--line);list-style:none}
+.gasto{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);list-style:none;font-size:14px}
+.conv{display:flex;flex-wrap:wrap;gap:6px}
+.conv button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 10px;font-size:13px;font-weight:600}
+.conv button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+html.grande{font-size:112%}
+html.grande body{zoom:1.12}

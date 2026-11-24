@@ -53,8 +53,8 @@ service cloud.firestore {
         ) || (
           // Cada jugador puede guardar sus días fijos de «no puedo ir»
           hasEmail() && resource.data.get('email', '') == myEmail() &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diasNo', 'diasNota']) &&
-          request.resource.data.diasNo is list && request.resource.data.diasNo.size() <= 7
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diasNo', 'diasNota', 'cumple']) &&
+          request.resource.data.get('diasNo', []) is list && request.resource.data.get('diasNo', []).size() <= 7
         );
       }
       match /tipos/{id}  { allow read: if signedIn(); allow write: if isAdminOf(e); }
@@ -117,6 +117,11 @@ service cloud.firestore {
         }
       }
 
+      // Gastos del bote, registro de cambios y recordatorios de pago: los escriben los administradores
+      match /gastos/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
+      match /registro/{id} { allow read: if signedIn(); allow create: if isAdminOf(e); allow update, delete: if false; }
+      match /recordatorios/{id} { allow read, create: if isAdminOf(e); allow update, delete: if false; }
+
       // Tablón de avisos: todos leen, solo los administradores escriben.
       match /avisos/{id} {
         allow read: if signedIn();
@@ -150,7 +155,7 @@ service cloud.firestore {
         get(/databases/$(database)/documents/equipos/ONTINYENT).data.get('propietario', '') == myEmail();
     }
     match /sugerencias/{id} {
-      allow create: if signedIn() && request.resource.data.texto is string &&
+      allow create: if hasEmail() && request.resource.data.autor == myEmail() && request.resource.data.texto is string &&
         request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 500;
       allow read, update, delete: if isAppOwner();
     }

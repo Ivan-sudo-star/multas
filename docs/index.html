@@ -7,8 +7,8 @@
 <meta name="description" content="Lleva las multas de tu equipo: quién debe qué, el bote y avisos al móvil">
 <meta name="theme-color" content="#29297a">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=2">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=3">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -91,6 +91,19 @@
   <ol class="rank" id="rank"></ol>
   <button type="button" class="btn ghost" id="copyBtn">Copiar resumen para WhatsApp</button>
   <p class="note" id="countedBy"></p>
+  <div class="card" id="boteCard">
+    <div class="who-line"><h3>🧾 El bote</h3><span class="mini" id="boteQueda"></span></div>
+    <div id="boteChart" class="chartbox"></div>
+    <p class="note" id="boteTop"></p>
+    <details id="gastosBox"><summary class="note" style="cursor:pointer">Gastos del bote <span id="gastosN"></span></summary>
+      <ul class="list" id="gastosList" style="margin-top:8px"></ul>
+      <form id="gastoForm" class="row" novalidate hidden style="margin-top:8px">
+        <label class="f">Concepto<input type="text" id="gConcepto" maxlength="60" placeholder="Ej.: Cena de Navidad"></label>
+        <label class="f" style="flex:0 1 110px">Importe (€)<input type="number" id="gImporte" min="0" step="0.5" inputmode="decimal"></label>
+        <button type="submit" class="btn small">Añadir gasto</button>
+      </form>
+    </details>
+  </div>
 </div></section>
 
 <!-- AÑADIR -->
@@ -144,11 +157,12 @@
     <label class="f">Motivo (opcional)<input type="text" id="diasNota" maxlength="60" placeholder="Ej.: trabajo los miércoles"></label>
     <button type="button" class="btn small" id="diasSave">Guardar mis días</button>
   </div>
-  <h3>Próximos</h3>
+  <div class="who-line"><h3>Próximos</h3><button type="button" class="btn small ghost" id="icsAll">📅 Añadir todos al calendario</button></div>
   <ul class="list" id="evNextList"></ul>
   <details class="past"><summary><h3>Anteriores <span id="evPastCount"></span></h3><span class="note">Para pasar lista o consultar</span></summary>
     <ul class="list" id="evPastList"></ul>
   </details>
+  <div class="card" id="asRankCard" hidden><h3>🏅 Asistencia de este mes</h3><div id="asRank"></div></div>
   <div class="card"><h3>Asistencia por jugador</h3><p class="note" id="asTableNote"></p><div id="asTable"></div></div>
 </div></section>
 
@@ -221,6 +235,12 @@
     <label class="f">Estado<select id="fState"><option value="">Todas</option><option value="pend">Por cobrar</option><option value="paid">Cobradas</option></select></label>
   </div>
   <label class="switch note"><span>Mostrar también las anteriores al inicio del conteo</span><input type="checkbox" id="fOld"></label>
+  <div class="card" id="pagosCard" hidden>
+    <div class="who-line"><h3>💶 Pagos</h3><span class="mini" id="pagosRes"></span></div>
+    <div id="pagosList"></div>
+  </div>
+  <div class="row"><button type="button" class="btn small ghost" id="csvBtn">⬇️ Descargar en Excel</button><button type="button" class="btn small ghost" id="logBtn">📜 Registro de cambios</button></div>
+  <div class="card" id="logBox" hidden><h3>📜 Registro de cambios</h3><ul class="list" id="logList"></ul></div>
   <div id="histList"></div>
 </div></section>
 
@@ -245,9 +265,19 @@
 
   <a class="card manual-link" href="#ayuda"><span class="g-ic az">📖</span><span><b>Manual de uso</b><br><span class="note">Cómo se usa cada parte de la app, paso a paso</span></span><span class="g-ch" aria-hidden="true">›</span></a>
 
+  <div class="card" id="pantallaCard">
+    <h3>🔠 Pantalla</h3>
+    <label class="switch"><span>Letra más grande</span><input type="checkbox" id="letraGrande"></label>
+  </div>
+  <div class="card" id="cumpleCard" hidden>
+    <h3>🎂 Tu cumpleaños</h3>
+    <p class="note">Ese día se avisará al equipo para que te feliciten. Puedes dejarlo vacío.</p>
+    <div class="row"><label class="f" style="max-width:220px">Fecha<input type="date" id="cumpleIn"></label><button type="button" class="btn small" id="cumpleSave">Guardar</button></div>
+  </div>
   <div class="card" id="sugCard">
     <h3>💡 Sugerir una mejora</h3>
     <p class="note">¿Echas algo en falta o algo no va bien? Escríbelo. Solo lo lee quien hace la app.</p>
+    <p class="note" id="sugNoCuenta" hidden>Para sugerir, entra con tu cuenta y vincúlate a tu nombre («Soy yo» en Resumen).</p>
     <label class="f">Tu idea<textarea id="sugText" maxlength="500" rows="3" placeholder="Ej.: Que se pueda ver quién ha pagado este mes…"></textarea></label>
     <button type="button" class="btn" id="sugSend">Enviar sugerencia</button>
   </div>
@@ -372,6 +402,12 @@
     <label class="switch" id="nFriWrap" hidden><span>Recordatorio del tiro de medio campo los viernes</span><input type="checkbox" id="nFri"></label>
     <p class="note">Las notificaciones del móvil llegan aunque la app esté cerrada. En iPhone primero hay que instalar la app en la pantalla de inicio (iOS 16.4 o posterior).</p>
   </div>
+  <div class="card" id="backupCard" hidden>
+    <h3>💾 Copia de seguridad</h3>
+    <p class="note">Descarga todos los datos del equipo en un archivo. Guárdalo en un sitio seguro: contiene nombres y correos.</p>
+    <button type="button" class="btn small" id="backupBtn">⬇️ Descargar copia</button>
+  </div>
+  <p class="note" style="text-align:center"><a href="privacidad.html">Privacidad y datos</a></p>
 </div></section>
 </main>
 

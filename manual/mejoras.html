@@ -1,0 +1,163 @@
+<title>Mejoras de la app del Caixa Ontinyent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: lista de mejoras con casillas grandes, filtros por categoría arriba y barra fija de resumen abajo */
+:root{
+  --bg:#f2f2f8; --surface:#ffffff; --ink:#17173d; --muted:#5d5d82; --line:#dcdcea;
+  --navy:#29297a; --orange:#e23a06; --orange-soft:#fde7de; --navy-soft:#e6e6f6; --ok:#1d7f48; --ok-soft:#dcf1e4;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e0e21; --surface:#18183a; --ink:#ececfa; --muted:#a4a4c8; --line:#2c2c55;
+  --navy:#9a9af2; --orange:#ff6a3a; --orange-soft:#3a1d14; --navy-soft:#24244c; --ok:#5bd08f; --ok-soft:#163226; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e0e21; --surface:#18183a; --ink:#ececfa; --muted:#a4a4c8; --line:#2c2c55;
+  --navy:#9a9af2; --orange:#ff6a3a; --orange-soft:#3a1d14; --navy-soft:#24244c; --ok:#5bd08f; --ok-soft:#163226; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:920px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 120px}
+header h1{font-family:var(--display);font-weight:800;font-size:clamp(30px,7vw,44px);text-transform:uppercase;line-height:1;margin:0 0 6px;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:62ch}
+.status{font-size:13px;color:var(--muted);margin-top:8px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 12px}
+.filters button{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.cat-h{font-family:var(--display);font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.03em;margin:22px 0 8px;display:flex;align-items:baseline;gap:8px}
+.cat-h span{font-family:var(--body);font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
+.list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.item{display:grid;grid-template-columns:44px minmax(0,1fr);gap:4px 12px;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;transition:border-color .15s,background .15s}
+.item.on{border-color:var(--ok);background:var(--ok-soft)}
+.check{width:32px;height:32px;border-radius:9px;border:2px solid var(--line);display:grid;place-items:center;background:var(--surface);font-size:20px;font-weight:800;color:#fff;align-self:start;margin-top:2px}
+.item.on .check{background:var(--ok);border-color:var(--ok)}
+.body{min-width:0}
+.body b{display:block;font-size:16px;line-height:1.3}
+.body p{margin:3px 0 6px;color:var(--muted);font-size:14px}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:2px 8px;background:var(--navy-soft);color:var(--navy)}
+.tag.rec{background:var(--orange-soft);color:var(--orange)}
+.tag.s{background:var(--ok-soft);color:var(--ok)}
+.note-in{grid-column:2;margin-top:6px;width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;font-size:14px;background:var(--bg);color:var(--ink)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--navy);color:#fff;z-index:5;padding-bottom:env(safe-area-inset-bottom,0px)}
+.bar .in{max-width:920px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.bar strong{font-family:var(--display);font-size:24px}
+.bar span{font-size:13px;opacity:.85}
+:root:not([data-theme="light"]) .bar{background:#1f1f5c}
+:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.item{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Mejoras de la app</h1>
+    <p>Toca las que quieras que haga. Se guardan solas y yo las leo desde aquí. Si quieres, añade un comentario en cada una. Todas son gratis, sin pagar nada.</p>
+    <div class="status" id="status">Conectando…</div>
+  </header>
+  <div class="filters" id="filters" role="group" aria-label="Filtrar"></div>
+  <div id="lista"></div>
+</div>
+<div class="bar" role="status"><div class="in"><span><strong id="nSel">0</strong> marcadas</span><span id="resumen">Toca una mejora para marcarla</span></div></div>
+
+<script>
+const IDEAS=[
+ // Multas y pagos
+ ["pagos-mes","Multas y pagos","Quién ha pagado este mes","Lista clara para quien cobra: quién lo tiene todo pagado, quién debe y cuánto, con un botón para cobrar.","M",true],
+ ["recordar-pago","Multas y pagos","Recordar el pago a un jugador","Botón junto a cada jugador que le manda una notificación: «Tienes 8 € pendientes».","S",true],
+ ["grafica-bote","Multas y pagos","Gráfica del bote","Cómo crece el bote mes a mes y qué faltas se repiten más.","M",false],
+ ["gastos-bote","Multas y pagos","Gastos del bote","Apuntar en qué se gasta el bote (cena, material) y ver lo que queda.","M",true],
+ ["historial-cambios","Multas y pagos","Registro de cambios","Quién puso, cobró o quitó cada multa y cuándo. Más transparencia.","M",false],
+ ["exportar","Multas y pagos","Descargar las multas en Excel","Un archivo con todas las multas para guardarlo o revisarlo.","S",false],
+ // Asistencia
+ ["convocatoria","Asistencia","Convocatoria de partido","El entrenador marca los convocados y les llega «Estás convocado para el sábado».","M",true],
+ ["calendario-movil","Asistencia","Añadir al calendario del móvil","Botón para meter los entrenos y partidos en el calendario del teléfono.","S",true],
+ ["mapa","Asistencia","Cómo llegar al pabellón","Enlace a Google Maps desde cada partido fuera de casa.","S",true],
+ ["calendario-mes","Asistencia","Vista de calendario mensual","Ver el mes entero con entrenos y partidos de un vistazo.","M",false],
+ ["motivo-novoy","Asistencia","Motivo obligatorio al decir «No voy»","Que haya que escribir por qué no vas (trabajo, lesión…).","S",false],
+ ["ranking-asistencia","Asistencia","Ranking de asistencia del mes","El que más viene, destacado. Y el que menos, también.","S",false],
+ ["borrar-antiguos","Asistencia","Borrar entrenos antiguos","Que los de hace más de un mes se borren solos. Dejarían de contar en los porcentajes.","S",false],
+ // Fantasy
+ ["fan-notas-entrenador","Fantasy","Que las notas del entrenador no cuenten","El entrenador solo vota al MVP; sus notas no entran en la media.","S",false],
+ ["fan-recordar-notas","Fantasy","Recordar poner notas","Aviso a quien aún no ha puesto notas antes de que se cierre la jornada.","S",true],
+ ["fan-jornadas","Fantasy","Historial por jornadas","Puntos de cada participante jornada a jornada.","M",true],
+ ["fan-precios","Fantasy","Gráfica de precios","Cómo sube o baja el valor de cada jugador.","M",false],
+ ["fan-tarjetas","Fantasy","Tarjetas para compartir","Imagen del MVP y del quinteto ideal de la jornada para WhatsApp o Instagram.","L",false],
+ // Scouting y liga
+ ["stats-rivales","Scouting y liga","Estadísticas de los rivales","Puntos por partido, minutos y triples de cada rival, copiados de la FBCV.","M",true],
+ ["stats-propias","Scouting y liga","Nuestras estadísticas","Puntos y minutos de cada uno de nosotros, de las actas de la FBCV.","M",false],
+ ["clasificacion-liga","Scouting y liga","Clasificación y resultados de la liga","La tabla de la liga y los resultados dentro de la app (se copian de la FBCV).","M",true],
+ ["notas-partido","Scouting y liga","Notas después del partido","Qué funcionó y qué no contra cada rival, para la vuelta.","S",false],
+ ["pizarra","Scouting y liga","Pizarra de jugadas","Dibujar jugadas y sistemas sobre una pista.","L",false],
+ // Equipo
+ ["cumples","Equipo","Cumpleaños","Aviso al equipo el día del cumpleaños de cada uno.","S",true],
+ ["perfil","Equipo","Ficha de cada jugador","Dorsal, posición, foto y sus números de la temporada en una ficha.","M",false],
+ ["valenciano","Equipo","App en valenciano","Poder cambiar el idioma de la app.","L",false],
+ ["letra-grande","Equipo","Letra más grande","Opción para ver la app con letra más grande.","S",false],
+ // Técnico
+ ["optimizar","Técnico y seguridad","Gastar menos lecturas de Firebase","Para que la tarea de avisos no se acerque al límite gratis, aunque haya más equipos.","M",true],
+ ["icono-neutro","Técnico y seguridad","Icono y nombre neutros","Que otros equipos no vean el escudo del Ontinyent como icono de la app.","S",false],
+ ["privacidad","Técnico y seguridad","Política de privacidad","Página básica que explica qué datos se guardan. Recomendable si la usan otros equipos.","S",true],
+ ["cuenta-sugerir","Técnico y seguridad","Cuenta obligatoria para sugerir","Que solo puedan enviar sugerencias quienes tengan cuenta.","S",false],
+ ["copia","Técnico y seguridad","Copia de seguridad","Botón para que el propietario descargue todos los datos del equipo.","S",true],
+];
+const CATS=[...new Set(IDEAS.map(i=>i[1]))];
+const ESF={S:"Rápida",M:"Media",L:"Grande"};
+let marcas={}, filtro="Todas", db=null, puedeEscribir=true;
+
+const $=s=>document.querySelector(s);
+function status(t){ $("#status").textContent=t; }
+function el(tag,cls,txt){ const e=document.createElement(tag); if(cls) e.className=cls; if(txt!=null) e.textContent=txt; return e; }
+
+function renderFiltros(){
+  const f=$("#filters"); f.replaceChildren();
+  ["Todas","Recomendadas","Marcadas",...CATS].forEach(c=>{ const b=el("button",null,c); b.type="button"; b.setAttribute("aria-pressed",c===filtro); b.onclick=()=>{filtro=c; render();}; f.append(b); });
+}
+function render(){
+  renderFiltros();
+  const box=$("#lista"); box.replaceChildren();
+  const vis=IDEAS.filter(i=> filtro==="Todas" || (filtro==="Recomendadas"&&i[5]) || (filtro==="Marcadas"&&marcas[i[0]]?.marcada) || i[1]===filtro);
+  CATS.forEach(cat=>{
+    const items=vis.filter(i=>i[1]===cat); if(!items.length) return;
+    const h=el("h2","cat-h",cat); h.append(el("span",null,`${items.filter(i=>marcas[i[0]]?.marcada).length} de ${items.length} marcadas`)); box.append(h);
+    const ul=el("ul","list");
+    items.forEach(([id,,titulo,desc,esf,rec])=>{
+      const on=!!marcas[id]?.marcada;
+      const li=el("li","item"+(on?" on":"")); li.tabIndex=0; li.setAttribute("role","checkbox"); li.setAttribute("aria-checked",on);
+      li.append(el("span","check",on?"✓":""));
+      const body=el("div","body"); body.append(el("b",null,titulo), el("p",null,desc));
+      const tags=el("div","tags"); tags.append(el("span","tag s",ESF[esf])); if(rec) tags.append(el("span","tag rec","Recomendada")); body.append(tags);
+      li.append(body);
+      if(on){ const inp=el("input","note-in"); inp.id="n-"+id; inp.placeholder="Comentario (opcional): cómo la quieres…"; inp.value=marcas[id]?.nota||""; inp.onclick=e=>e.stopPropagation(); inp.onkeydown=e=>e.stopPropagation();
+        inp.onchange=()=>guardar(id,{marcada:true,nota:inp.value.trim().slice(0,300)}); li.append(inp); }
+      const toggle=()=>guardar(id,{marcada:!on, nota:marcas[id]?.nota||""});
+      li.onclick=toggle; li.onkeydown=e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); toggle(); } };
+      ul.append(li);
+    });
+    box.append(ul);
+  });
+  if(!box.children.length) box.append(el("p","status","No hay ninguna en este filtro."));
+  const sel=IDEAS.filter(i=>marcas[i[0]]?.marcada);
+  $("#nSel").textContent=sel.length;
+  $("#resumen").textContent = sel.length ? `${sel.filter(i=>i[4]==="S").length} rápidas · ${sel.filter(i=>i[4]==="M").length} medias · ${sel.filter(i=>i[4]==="L").length} grandes` : "Toca una mejora para marcarla";
+}
+async function guardar(id,val){
+  marcas[id]={...val, actualizado:Date.now()}; render();
+  if(!db){ status("Sin conexión: tus marcas no se están guardando."); return; }
+  if(!puedeEscribir){ status("Solo puedes ver la lista."); return; }
+  try{ await db.collection("marcas").doc(id).set({...val, actualizado:Date.now()}); status("Guardado ✓"); }
+  catch(e){ if(e?.code==="invalid_argument"){ puedeEscribir=false; status("Solo puedes ver la lista; no puedes marcar."); } else status("No se pudo guardar. Inténtalo de nuevo."); }
+}
+render();
+(async()=>{
+  try{ db=await window.claude?.use?.("db"); }catch{ db=null; }
+  if(!db){ status("No se pueden guardar las marcas aquí. Ábrelo desde claude.ai con tu cuenta."); return; }
+  const t=setTimeout(()=>status("Tardando en cargar tus marcas…"),10000);
+  db.collection("marcas").onSnapshot(s=>{
+    clearTimeout(t);
+    const m={}; s.docs.forEach(d=>{ m[d.id]=d.data(); }); marcas=m;
+    if(!s.metadata.fromCache) status("Tus marcas se guardan solas.");
+    const foco=document.activeElement?.id; render(); if(foco) document.getElementById(foco)?.focus();
+  }, e=>{ clearTimeout(t); status("No se pueden leer las marcas ahora mismo."); });
+})();
+</script>

@@ -125,7 +125,7 @@ let seenT;
 function markSeenSoon(){ clearTimeout(seenT); seenT=setTimeout(()=>{ S.lastSeen=Date.now(); store.set("multas.lastSeen."+TEAM,S.lastSeen); renderBadge(); },2500); }
 
 /* ---------- pintar ---------- */
-function renderAll(){ renderFantasy(); renderHeader(); renderResumen(); renderAsis(); renderAdd(); renderHist(); renderEquipo(); renderAjustes(); renderPlanes(); renderScouting(); renderBadge(); }
+function renderAll(){ renderFantasy(); renderHeader(); renderResumen(); renderBote(); renderPagos(); renderLog(); renderCumple(); renderAsis(); renderAdd(); renderHist(); renderEquipo(); renderAjustes(); renderPlanes(); renderScouting(); renderBadge(); }
 
 function renderHeader(){
   const name = teamOpen ? (S.aj.nombre||"Tu equipo") : "Del equipo";
@@ -149,6 +149,7 @@ function renderResumen(){
   $("#fridayBanner").hidden = !(new Date().getDay()===5 && S.aj.viernes && S.prefs.fri);
   renderAvisos();
   renderMe();
+  const ch=cumpleHoy(); if(ch.length && $("#fridayBanner")) { const b=$("#cumpleBanner")||(()=>{ const x=document.createElement("div"); x.id="cumpleBanner"; x.className="banner"; $("#fridayBanner").after(x); return x; })(); b.hidden=false; b.innerHTML=`<p>🎂 ¡Hoy es el cumple de ${ch.map(p=>"<b>"+esc(shortName(p.nombre))+"</b>").join(" y ")}! Felicítale.</p>`; } else if($("#cumpleBanner")) $("#cumpleBanner").hidden=true;
   const me = myPlayer();
 
   const by = new Map();
@@ -258,7 +259,7 @@ function asStats(){
 }
 function renderAsis(){
   if(!$("#v-asistencia")) return;
-  renderDias();
+  renderDias(); renderRankMes();
   const er=$("#evRivalWrap"); if(er) er.hidden=$("#evTipo").value!=="partido";
   $("#evForm").hidden=!S.canWrite;
   if(!$("#evFecha").value) $("#evFecha").value=today();
@@ -296,6 +297,7 @@ function evCard(ev, upcoming){
     <div class="evhead"><span class="evdate"><b>${d.getDate()}</b><span>${MESES[d.getMonth()].slice(0,3)}</span></span>
       <span class="who"><b>${esc(evTitle(ev))}</b><span>${esc(d.toLocaleDateString("es-ES",{weekday:"long"}))}${ev.hora?" · "+esc(ev.hora):""}${ev.fecha===today()?" · hoy":""}${ev.lugar?"<br>📍 "+esc(ev.lugar):""}</span></span>
       <span class="evcount">${count}</span></div>`;
+  if(upcoming) html+=convHtml(ev);
   if(upcoming && ev.cierre) html+= isClosed(ev)
       ? `<span class="pill old" style="align-self:flex-start">Plazo cerrado${ev.plazoCerrado?" · ya se multó a quien no contestó":""}</span>`
       : `<span class="note">⏳ Contesta antes de <b>${esc(fmtCierre(ev.cierre))}</b> o habrá multa</span>`;
@@ -308,6 +310,9 @@ function evCard(ev, upcoming){
   if(upcoming && !me && email()) html+=`<span class="note">Vincula tu cuenta en «Resumen» para poder decir si vas.</span>`;
   html+=`<div class="row"><button type="button" class="btn small ${S.canWrite&&!marked&&!upcoming?"":"ghost"}" data-evopen="${esc(ev.id)}" aria-expanded="${open}">${open?"Cerrar lista":(S.canWrite?"Pasar lista":"Ver lista")}</button>
     ${ev.tipo==="partido"&&ev.rival?`<button type="button" class="btn small ghost" data-scout="${esc(ev.rival)}">🔎 Scouting</button>`:""}
+    ${upcoming?`<button type="button" class="btn small ghost" data-ics="${esc(ev.id)}" aria-label="Añadir al calendario">📅</button>`:""}
+    ${upcoming&&ev.lugar&&!/ONTINYENT/i.test(ev.lugar)?`<a class="btn small ghost" style="text-decoration:none;display:inline-flex;align-items:center" href="${esc(mapaUrl(ev.lugar))}" target="_blank" rel="noopener">📍 Cómo llegar</a>`:""}
+    ${S.canWrite&&upcoming&&ev.tipo==="partido"?`<button type="button" class="btn small ghost" data-conv="${esc(ev.id)}">📋 Convocar</button>`:""}
     ${S.canWrite&&upcoming?`<button type="button" class="btn small ghost" data-evping="${esc(ev.id)}" ${ev.avisar?"disabled":""}>${ev.avisar?"Aviso en camino…":"Avisar a todos ahora"}</button>`:""}
     ${S.canWrite?`<span style="flex:1"></span><button type="button" class="btn small danger" data-evdel="${esc(ev.id)}">Borrar</button>`:""}</div>`;
   if(open){
@@ -423,6 +428,8 @@ function renderAjustes(){
   $("#nFriWrap").hidden = !S.aj.viernes;
   renderPagoCfg();
   renderAyuda();
+  $("#sugNoCuenta").hidden=!!myPlayer(); $("#sugText").closest("label").hidden=!myPlayer(); $("#sugSend").hidden=!myPlayer();
+  $("#backupCard").hidden=!isOwnerTeam();
   renderFanCfg();
   { const pl=plazoCfg(); const t=typeById(pl.tipo);
     $("#plSummary").textContent = pl.activo
@@ -559,6 +566,7 @@ document.addEventListener("click", e=>{
       if(other){ toast("Ese correo ya es de "+other.nombre); return; }
       run(()=>F.updateDoc(dref("jugadores",d.mailsave),{email:v}), v?"Correo guardado":"Cuenta quitada"); return; }
   if(d.ay){ showAyuda(d.ay); return; }
+  if(handleTanda1(t,d)) return;
   if(handleFanClick(t,d)) return;
   if(handlePlanClick(t,d)) return;
   if(handleScoutClick(t,d)) return;
@@ -571,6 +579,9 @@ document.addEventListener("click", e=>{
   if(d.rsvp){ const [id,v]=d.rsvp.split("|"); const ev=evById(id); const me=myPlayer(); if(!ev||!me) return;
       if(isClosed(ev)){ toast("El plazo para contestar ya se ha cerrado"); return; }
       const cur=confirmOf(ev,me); const nv = cur===v ? "" : v;
+      if(nv==="no"){ const motivo=(document.getElementById("nt-"+id)?.value||"").trim().slice(0,80);
+        if(!motivo){ toast("Escribe el motivo en el comentario y vuelve a pulsar «No voy»"); document.getElementById("nt-"+id)?.focus(); return; }
+        run(()=>F.updateDoc(dref("eventos",id), new F.FieldPath("confirma",email()), "no", new F.FieldPath("notas",email()), motivo),"Apuntado: no vas"); return; }
       // Si era el «No voy» automático del día fijo y cambia de idea, se quita también el motivo (solo en este entreno)
       const nt=noteOf(ev,me); const fijo = nt && (nt===me.diasNota || nt==="Día fijo");
       const extra = (nv!=="no" && fijo) ? [new F.FieldPath("notas",email()), ""] : [];
@@ -602,10 +613,11 @@ document.addEventListener("click", e=>{
   if(d.rank!==undefined){ S.openRank = S.openRank===d.rank?null:d.rank; renderResumen(); return; }
   if(d.type!==undefined){ S.selType=d.type; renderAdd(); return; }
   if(d.player!==undefined){ S.selPlayers.has(d.player)?S.selPlayers.delete(d.player):S.selPlayers.add(d.player); t.setAttribute("aria-pressed",S.selPlayers.has(d.player)); updatePreview(); return; }
-  if(d.pay){ const m=S.multas.find(x=>x.id===d.pay); if(m) run(()=>F.updateDoc(dref("multas",m.id),{pagada:!m.pagada, pagadaEn:!m.pagada?Date.now():null}), m.pagada?"Cobro deshecho":"Marcada como cobrada"); return; }
-  if(d.del){ armed(t,"¿Quitar? Toca otra vez",()=>run(()=>F.deleteDoc(dref("multas",d.del)),"Multa quitada")); return; }
+  if(d.pay){ const m=S.multas.find(x=>x.id===d.pay); if(m){ const b=F.writeBatch(db); b.update(dref("multas",m.id),{pagada:!m.pagada, pagadaEn:!m.pagada?Date.now():null}); logCambio(b,m.pagada?"descobro":"cobro",multaTxt(m)); run(()=>b.commit(), m.pagada?"Cobro deshecho":"Marcada como cobrada"); } return; }
+  if(d.del){ armed(t,"¿Quitar? Toca otra vez",()=>{ const m=S.multas.find(x=>x.id===d.del); const b=F.writeBatch(db); b.delete(dref("multas",d.del)); if(m) logCambio(b,"quitar",multaTxt(m)); run(()=>b.commit(),"Multa quitada"); }); return; }
   if(d.payall){ armed(t,"Confirmar cobro",()=>{ const list=S.multas.filter(m=>m.jugador===d.payall&&!m.pagada&&inPeriod(m));
       const b=F.writeBatch(db); list.forEach(m=>b.update(dref("multas",m.id),{pagada:true,pagadaEn:Date.now()}));
+      if(list.length) logCambio(b,"cobro",`${playerById(d.payall)?.nombre||""} · cobra todo · ${eur(list.reduce((a,m)=>a+(+m.importe||0),0))}`);
       run(()=>b.commit(),"Cobradas "+list.length+" multas"); }); return; }
   if(d.remove){ armed(t,"¿Quitar? Toca otra vez",()=>run(()=>F.updateDoc(dref("jugadores",d.remove),{activo:false}),"Quitado del equipo")); return; }
   if(d.restore){ run(()=>F.updateDoc(dref("jugadores",d.restore),{activo:true}),"De vuelta en el equipo"); return; }
@@ -724,7 +736,8 @@ $("#addForm").addEventListener("submit", e=>{
   const q=getQty(); const fecha=$("#fecha").value||today(); const nota=$("#nota").value.trim();
   const b=F.writeBatch(db);
   ids.forEach(id=>{ const p=playerById(id);
-    b.set(F.doc(col("multas")),{jugador:id, jugadorNombre:p?.nombre||"", tipo:t.id, tipoNombre:t.nombre, unidad:t.unidad||"fijo", precio:+t.precio, cantidad:q, importe:(+t.precio)*q, fecha, nota, pagada:false, notificada:false, creado:Date.now(), autor:S.user?.uid||""}); });
+    b.set(F.doc(col("multas")),{jugador:id, jugadorNombre:p?.nombre||"", tipo:t.id, tipoNombre:t.nombre, unidad:t.unidad||"fijo", precio:+t.precio, cantidad:q, importe:(+t.precio)*q, fecha, nota, pagada:false, notificada:false, creado:Date.now(), autor:S.user?.uid||""});
+    logCambio(b,"multa",`${p?.nombre||""} · ${t.nombre}${q>1?" ×"+q:""} · ${eur((+t.precio)*q)}`); });
   // El lote se guarda en el móvil al momento y se sube cuando hay red
   b.commit().catch(err=>{ console.error(err); toast(errMsg(err)); });
   toast(ids.length===1?"Multa puesta: "+eur((+t.precio)*q):ids.length+" multas puestas");
@@ -1152,7 +1165,7 @@ async function initSugerencias(){
       const list=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.hecha?1:0)-(b.hecha?1:0)||(b.creado||0)-(a.creado||0));
       const np=list.filter(x=>!x.hecha).length; $("#sugCount").textContent = np+(np===1?" pendiente":" pendientes");
       $("#sugList").innerHTML = list.length ? list.map(x=>`<div class="sug ${x.hecha?"hecha":""}"><p>${esc(x.texto)}</p>
-        <span class="mini">${esc(x.nombre||"Alguien")} · ${esc(x.equipoNombre||x.equipo||"")} · ${esc(haceCuanto(x.creado||0))}</span>
+        <span class="mini">${esc(x.nombre||"Alguien")}${x.rol?" ("+esc(x.rol)+")":""} · ${esc(x.equipoNombre||x.equipo||"")} · ${esc(haceCuanto(x.creado||0))}</span>
         <span class="row"><button type="button" class="btn small ${x.hecha?"ghost":"ok"}" data-sughecha="${esc(x.id)}">${x.hecha?"Marcar pendiente":"✓ Hecha"}</button><button type="button" class="btn small danger" data-sugdel="${esc(x.id)}">Borrar</button></span></div>`).join("")
         : '<p class="note">Todavía no hay sugerencias.</p>';
     }, e=>console.warn(e));
@@ -1160,8 +1173,8 @@ async function initSugerencias(){
 }
 $("#sugSend").addEventListener("click",()=>{
   const texto=$("#sugText").value.trim(); if(!texto){ toast("Escribe tu sugerencia"); return; }
-  if(!S.user){ toast("Espera a que cargue la app"); return; }
-  run(()=>F.addDoc(F.collection(db,"sugerencias"),{texto:texto.slice(0,500), nombre:myPlayer()?.nombre||email()||"Anónimo", autor:email()||"", equipo:TEAM||"", equipoNombre:S.aj.nombre||"", creado:Date.now(), enviada:false, hecha:false}),"¡Gracias! Sugerencia enviada")
+  const me=myPlayer(); if(!me){ toast("Para sugerir, vincúlate a tu nombre con «Soy yo»"); return; }
+  run(()=>F.addDoc(F.collection(db,"sugerencias"),{texto:texto.slice(0,500), nombre:me.nombre, rol:me.rol==="entrenador"?"entrenador":"jugador", autor:email(), equipo:TEAM||"", equipoNombre:S.aj.nombre||"", creado:Date.now(), enviada:false, hecha:false}),"¡Gracias! Sugerencia enviada")
     .then(ok=>{ if(ok) $("#sugText").value=""; });
 });
 
@@ -1268,10 +1281,11 @@ function votacion(jr){
   const v = S.fanVotos || (S.fanMine?.votos ? {notas:{...(S.fanMine.votos.notas||{})}, mvp:S.fanMine.votos.mvp||null} : {notas:{},mvp:null});
   S.fanVotos=v;
   const ESC=[-2,-1,0,1,2,3,4,5,6,7,8,9,10];
-  let h=`<h3 style="margin-top:14px">⭐ Notas del partido</h3><p class="note">De −2 a 10. Son anónimas: nadie sabe qué nota ha puesto cada uno.</p>`;
+  const coach = me?.rol==="entrenador";
+  let h=`<h3 style="margin-top:14px">⭐ ${coach?"MVP del partido":"Notas del partido"}</h3><p class="note">${coach?"Como entrenador solo votas al MVP; tus notas no cuentan en la media.":"De −2 a 10. Son anónimas: nadie sabe qué nota ha puesto cada uno."}</p>`;
   h+=jugaron.map(p=>`<div class="stack" style="border-top:1px dashed var(--line);padding-top:8px;margin-top:6px"><div class="who-line"><b>${esc(p.nombre)}</b><button type="button" class="cap" data-fanmvp="${esc(p.id)}" aria-pressed="${v.mvp===p.id}">🏆 MVP</button></div>
-     <div class="nota-sel">${ESC.map(n=>`<button type="button" data-fannota="${esc(p.id)}|${n}" aria-pressed="${v.notas[p.id]===n}">${n}</button>`).join("")}</div></div>`).join("");
-  const ok=jugaron.every(p=>v.notas[p.id]!==undefined) && v.mvp;
+     ${coach?"":`<div class="nota-sel">${ESC.map(n=>`<button type="button" data-fannota="${esc(p.id)}|${n}" aria-pressed="${v.notas[p.id]===n}">${n}</button>`).join("")}</div>`}</div>`).join("");
+  const ok=(coach || jugaron.every(p=>v.notas[p.id]!==undefined)) && v.mvp;
   h+=`<button type="button" class="btn big" id="fanSaveVotos" ${ok?"":"disabled"} style="margin-top:10px">${S.fanMine?.votos?"Guardar cambios":"Enviar notas"}</button>
      <span class="note">${ok?"Puedes cambiarlas hasta 2 días después del partido.":"Pon nota a todos y elige un MVP."}</span>`;
   return h;
@@ -1303,6 +1317,156 @@ function handleFanClick(t,d){
   return false;
 }
 
+
+/* ---------- tanda 1 de mejoras ---------- */
+function descargar(nombre, contenido, tipo){
+  try{ const blob=new Blob([contenido],{type:tipo}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=nombre; document.body.append(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500); }
+  catch(e){ console.error(e); toast("No se pudo descargar el archivo."); }
+}
+// Registro de cambios: se escribe en el mismo lote que el cambio
+function logCambio(b, accion, detalle){ b.set(F.doc(col("registro")),{accion, detalle:String(detalle).slice(0,160), autor:myName(), creado:Date.now()}); }
+const multaTxt = m => `${m.jugadorNombre||playerById(m.jugador)?.nombre||"?"} · ${m.tipoNombre}${qtyTxt(m)} · ${eur(m.importe)}`;
+
+// Letra grande (preferencia de cada móvil)
+function aplicarLetra(){ const on=!!store.get("multas.letraGrande",false); document.documentElement.classList.toggle("grande",on); const c=$("#letraGrande"); if(c) c.checked=on; }
+$("#letraGrande").addEventListener("change",e=>{ store.set("multas.letraGrande",e.target.checked); aplicarLetra(); });
+aplicarLetra();
+
+// El bote: gráfica por mes, faltas más repetidas y gastos
+const MES_CORTO=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+function renderBote(){
+  const card=$("#boteCard"); if(!card) return;
+  const list=S.multas.filter(inPeriod);
+  card.hidden = !S.ready.m || (!list.length && !(S.gastos||[]).length);
+  const cobrado=list.filter(m=>m.pagada).reduce((a,m)=>a+(+m.importe||0),0);
+  const gastado=(S.gastos||[]).reduce((a,g)=>a+(+g.importe||0),0);
+  $("#boteQueda").textContent=`Cobrado ${eur(cobrado)} · gastado ${eur(gastado)} · queda ${eur(cobrado-gastado)}`;
+  // últimos 6 meses
+  const hoy=new Date(); const meses=[];
+  for(let i=5;i>=0;i--){ const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1); meses.push({k:d.getFullYear()+"-"+pad(d.getMonth()+1), l:MES_CORTO[d.getMonth()], v:0}); }
+  list.forEach(m=>{ const k=(m.fecha||"").slice(0,7); const x=meses.find(y=>y.k===k); if(x) x.v+=+m.importe||0; });
+  const W=320,H=150,pt=20,pb=22,gap=10,bw=(W-gap*7)/6, max=Math.max(1,...meses.map(x=>x.v));
+  const y=v=>H-pb-(v/max)*(H-pt-pb);
+  const barPath=(x,v)=>{ const top=y(v), b=H-pb, r=Math.min(4,(b-top)); if(v<=0) return ""; return `M${x},${b}V${top+r}Q${x},${top} ${x+r},${top}H${x+bw-r}Q${x+bw},${top} ${x+bw},${top+r}V${b}Z`; };
+  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Multas por mes, últimos 6 meses">`;
+  svg+=`<line class="base" x1="0" x2="${W}" y1="${H-pb}" y2="${H-pb}"/>`;
+  meses.forEach((x,i)=>{ const bx=gap+i*(bw+gap); const now=i===5;
+    svg+=`<g><title>${x.l}: ${eur(x.v)}</title><rect class="hit" x="${bx-gap/2}" y="0" width="${bw+gap}" height="${H}"/><path class="bar ${now?"now":""}" d="${barPath(bx,x.v)}"/>`+
+      `<text class="ax" x="${bx+bw/2}" y="${H-6}" text-anchor="middle">${x.l}</text>`+
+      (now&&x.v>0?`<text class="val" x="${bx+bw/2}" y="${y(x.v)-5}" text-anchor="middle">${eur(x.v)}</text>`:"")+`</g>`; });
+  $("#boteChart").innerHTML=svg+"</svg>";
+  const por={}; list.forEach(m=>{ por[m.tipoNombre]=(por[m.tipoNombre]||0)+(m.unidad==="minuto"?1:(m.cantidad||1)); });
+  const top=Object.entries(por).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  $("#boteTop").textContent = top.length ? "Lo que más se repite: "+top.map(([n,c])=>`${n} (${c})`).join(" · ") : "";
+  const gs=[...(S.gastos||[])].sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+  $("#gastosN").textContent=gs.length?`(${gs.length})`:"";
+  $("#gastosList").innerHTML = gs.length ? gs.map(g=>`<li class="gasto"><span>${esc(g.concepto)} <span class="mini">· ${esc(dayName(g.fecha))}</span></span><span><b>${eur(g.importe)}</b>${S.canWrite?` <button type="button" class="btn small danger" data-gdel="${esc(g.id)}">✕</button>`:""}</span></li>`).join("") : '<li class="note">Todavía no se ha gastado nada del bote.</li>';
+  $("#gastoForm").hidden=!S.canWrite;
+}
+$("#gastoForm").addEventListener("submit",e=>{
+  e.preventDefault(); const concepto=$("#gConcepto").value.trim(), importe=+$("#gImporte").value;
+  if(!concepto||!(importe>0)){ toast("Pon el concepto y el importe"); return; }
+  const b=F.writeBatch(db); b.set(F.doc(col("gastos")),{concepto, importe, fecha:today(), autor:myName(), creado:Date.now()}); logCambio(b,"gasto",`${concepto} · ${eur(importe)}`);
+  run(()=>b.commit(),"Gasto apuntado").then(ok=>{ if(ok){ $("#gConcepto").value=""; $("#gImporte").value=""; } });
+});
+
+// Pagos del mes (para quien cobra)
+function renderPagos(){
+  const card=$("#pagosCard"); if(!card) return;
+  card.hidden=!S.canWrite;
+  if(!S.canWrite) return;
+  const ym=today().slice(0,7);
+  const rows=activePlayers().map(p=>{ const pend=S.multas.filter(m=>m.jugador===p.id&&!m.pagada); const ahora=pend.filter(m=>mesCobro(m.fecha)<=ym);
+    return {p, total:pend.reduce((a,m)=>a+(+m.importe||0),0), ahora:ahora.reduce((a,m)=>a+(+m.importe||0),0)}; }).sort((a,b)=>b.total-a.total||sortPlayers(a.p,b.p));
+  const deben=rows.filter(r=>r.total>0);
+  $("#pagosRes").textContent = deben.length ? `${deben.length} deben · ${eur(deben.reduce((a,r)=>a+r.total,0))}` : "Todos al día ✅";
+  $("#pagosList").innerHTML = rows.map(r=>`<div class="pg"><span class="av ${hasDor(r.p)?"num":""}">${esc(avTxt(r.p))}</span><span><b>${esc(r.p.nombre)}</b><br><span class="mini">${r.total>0?`Debe ${eur(r.total)}${r.ahora<r.total?` (${eur(r.ahora)} de este mes)`:""}`:"Al día ✅"}</span></span>
+    <span class="acc">${r.total>0?`<button type="button" class="btn small ghost" data-recpago="${esc(r.p.id)}|${r.total}" ${r.p.email?"":"disabled title=\"No tiene cuenta\""}>🔔 Recordar</button><button type="button" class="btn small ok" data-payall="${esc(r.p.id)}">Cobrar</button>`:""}</span></div>`).join("");
+}
+// Registro de cambios
+function renderLog(){
+  if($("#logBox").hidden) return;
+  const l=[...(S.registro||[])].sort((a,b)=>(b.creado||0)-(a.creado||0)).slice(0,60);
+  const IC={multa:"💸",cobro:"✅",descobro:"↩️",quitar:"🗑️",gasto:"🧾"};
+  $("#logList").innerHTML = l.length ? l.map(x=>`<li class="logi">${IC[x.accion]||"•"} ${esc(x.detalle)}<br><span class="mini">${esc(shortName(x.autor))} · ${esc(haceCuanto(x.creado||0))}</span></li>`).join("") : '<li class="note">Todavía no hay cambios registrados.</li>';
+}
+// Excel (CSV con punto y coma, que es lo que abre Excel en español)
+function exportarCSV(){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const filas=[["Fecha","Jugador","Falta","Cantidad","Importe (€)","Estado","Nota"]];
+  [...S.multas].sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")).forEach(m=>filas.push([m.fecha, playerById(m.jugador)?.nombre||m.jugadorNombre, m.tipoNombre, m.cantidad||1, String(+m.importe||0).replace(".",","), m.pagada?"Cobrada":"Pendiente", m.nota||""]));
+  descargar(`multas-${(S.aj.nombre||"equipo").replace(/\W+/g,"-")}-${today()}.csv`, "﻿"+filas.map(f=>f.map(q).join(";")).join("\r\n"), "text/csv;charset=utf-8");
+}
+// Calendario del móvil (.ics)
+function icsDe(evs){
+  const f=s=>s.replace(/[-:]/g,""); const lin=[ "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Multas del equipo//ES","CALSCALE:GREGORIAN" ];
+  const escI=s=>String(s||"").replace(/[\\,;]/g,m=>"\\"+m).replace(/\n/g,"\\n");
+  evs.forEach(ev=>{ const h=ev.hora||"12:00"; const ini=new Date(ev.fecha+"T"+h); const fin=new Date(ini.getTime()+(ev.tipo==="partido"?2:1.5)*3600e3);
+    const loc=d=>d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+"T"+pad(d.getHours())+pad(d.getMinutes())+"00";
+    lin.push("BEGIN:VEVENT","UID:"+ev.id+"@multas-"+TEAM,"DTSTAMP:"+f(new Date().toISOString().slice(0,19))+"Z","DTSTART:"+loc(ini),"DTEND:"+loc(fin),
+      "SUMMARY:"+escI(`${ev.tipo==="partido"?"🏀 Partido":"Entreno"}${ev.nota?" · "+ev.nota:""} (${S.aj.nombre||""})`), ...(ev.lugar?["LOCATION:"+escI(ev.lugar)]:[]), "END:VEVENT"); });
+  lin.push("END:VCALENDAR"); return lin.join("\r\n");
+}
+const mapaUrl = lugar => "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(lugar+", Comunitat Valenciana");
+// Ranking de asistencia del mes
+function renderRankMes(){
+  const card=$("#asRankCard"); if(!card) return;
+  const ym=today().slice(0,7);
+  const evs=S.eventos.filter(e=>(e.fecha||"").startsWith(ym) && e.asistencia && Object.keys(e.asistencia).length);
+  card.hidden=!evs.length; if(!evs.length) return;
+  const r=activePlayers().filter(p=>p.rol!=="entrenador").map(p=>{ let v=0,t=0; evs.forEach(e=>{ const a=e.asistencia[p.id]; if(a){ t++; if(attended(a)) v++; } }); return {p,v,t}; }).filter(x=>x.t).sort((a,b)=>b.v/b.t-a.v/a.t||b.v-a.v);
+  const top=r.slice(0,3), cola=r.filter(x=>x.v/x.t<0.5).slice(-2);
+  $("#asRank").innerHTML = `<p class="note">${["🥇","🥈","🥉"].map((m,i)=>top[i]?`${m} <b>${esc(shortName(top[i].p.nombre))}</b> ${top[i].v}/${top[i].t}`:"").filter(Boolean).join(" · ")}</p>`+
+    (cola.length?`<p class="mini">A mejorar: ${cola.map(x=>`${esc(shortName(x.p.nombre))} ${x.v}/${x.t}`).join(" · ")}</p>`:"");
+}
+// Cumpleaños
+function renderCumple(){
+  const me=myPlayer(); const c=$("#cumpleCard"); if(!c) return;
+  c.hidden=!me; if(!me) return;
+  if(document.activeElement!==$("#cumpleIn")) $("#cumpleIn").value=me.cumple||"";
+}
+$("#cumpleSave").addEventListener("click",()=>{ const me=myPlayer(); if(!me) return; const v=$("#cumpleIn").value||"";
+  run(()=>F.updateDoc(dref("jugadores",me.id),{cumple:v}), v?"Cumpleaños guardado 🎂":"Cumpleaños quitado"); });
+const cumpleHoy = () => { const md=today().slice(5); return activePlayers().filter(p=>(p.cumple||"").slice(5)===md); };
+// Copia de seguridad (solo el propietario del equipo)
+async function copiaSeguridad(){
+  const btn=$("#backupBtn"); btn.disabled=true;
+  try{
+    const rivales=[];
+    for(const r of S.rivales){ let notas=[]; try{ notas=(await F.getDocs(F.collection(db,"equipos",TEAM,"rivales",r.id,"notas"))).docs.map(d=>({id:d.id,...d.data()})); }catch{} rivales.push({...r, notas}); }
+    const data={exportado:new Date().toISOString(), equipo:{id:TEAM,...S.aj}, jugadores:S.jug, tipos:S.tipos, multas:S.multas, gastos:S.gastos||[], eventos:S.eventos, avisos:S.avisos, planes:S.planes, rivales, fantasy:S.fan||null};
+    descargar(`copia-${TEAM}-${today()}.json`, JSON.stringify(data,null,1), "application/json");
+  } finally { btn.disabled=false; }
+}
+// Convocatoria
+function convHtml(ev){
+  if(ev.tipo!=="partido") return "";
+  const conv=ev.convocados||[]; const me=myPlayer();
+  let h="";
+  if(conv.length) h+=`<span class="note">📋 Convocados: ${conv.length}${me&&conv.includes(me.id)?' · <b style="color:var(--ok)">estás convocado</b>':me&&me.rol!=="entrenador"?" · no estás en la lista":""}</span>`;
+  if(S.canWrite && S.convEv===ev.id){
+    const sel=S.convSel||new Set(conv); S.convSel=sel;
+    h+=`<div class="conv">${activePlayers().filter(p=>p.rol!=="entrenador").map(p=>`<button type="button" data-convp="${esc(p.id)}" aria-pressed="${sel.has(p.id)}">${hasDor(p)?"#"+esc(p.dorsal)+" ":""}${esc(shortName(p.nombre))}</button>`).join("")}</div>
+      <div class="row"><button type="button" class="btn small" data-convsave="${esc(ev.id)}">Guardar y avisar (${sel.size})</button><button type="button" class="btn small ghost" data-convcancel="1">Cancelar</button></div>`;
+  }
+  return h;
+}
+function handleTanda1(t,d){
+  if(t.id==="csvBtn"){ exportarCSV(); return true; }
+  if(t.id==="logBtn"){ $("#logBox").hidden=!$("#logBox").hidden; renderLog(); return true; }
+  if(t.id==="icsAll"){ const evs=S.eventos.filter(e=>e.fecha>=today()); if(!evs.length){ toast("No hay entrenos ni partidos próximos"); return true; } descargar(`calendario-${TEAM}.ics`, icsDe(evs), "text/calendar"); toast("Ábrelo para añadirlos al calendario"); return true; }
+  if(d.ics){ const ev=evById(d.ics); if(ev) descargar(`${ev.tipo}-${ev.fecha}.ics`, icsDe([ev]), "text/calendar"); return true; }
+  if(d.gdel){ armed(t,"¿Borrar?",()=>run(()=>F.deleteDoc(F.doc(col("gastos"),d.gdel)),"Gasto borrado")); return true; }
+  if(d.recpago){ const [pid,imp]=d.recpago.split("|"); const p=playerById(pid);
+    run(()=>F.addDoc(col("recordatorios"),{jugador:pid, importe:+imp, creado:Date.now(), enviado:false, autor:myName()}),`Recordatorio enviado a ${shortName(p?.nombre)}. Le llegará en unos minutos`); return true; }
+  if(t.id==="backupBtn"){ copiaSeguridad(); return true; }
+  if(d.conv){ S.convEv = S.convEv===d.conv?null:d.conv; S.convSel=null; renderAsis(); return true; }
+  if(d.convp){ S.convSel.has(d.convp)?S.convSel.delete(d.convp):S.convSel.add(d.convp); renderAsis(); return true; }
+  if(d.convcancel){ S.convEv=null; S.convSel=null; renderAsis(); return true; }
+  if(d.convsave){ const lista=[...S.convSel]; run(()=>F.updateDoc(dref("eventos",d.convsave),{convocados:lista, convocAviso:false}),`Convocatoria guardada (${lista.length}). Se avisará a los convocados`).then(ok=>{ if(ok){ S.convEv=null; S.convSel=null; renderAsis(); } }); return true; }
+  return false;
+}
+
 /* ---------- conexión con los datos ---------- */
 function setStatus(msg){ const s=$("#status"); s.hidden=!msg; s.textContent=msg||""; }
 let unsubs=[];
@@ -1316,6 +1480,8 @@ function subscribe(){
     const mid=myPlayer()?.id||""; if(mid!==S.meId){ S.meId=mid; syncTokenPrefs(); }
     renderAll(); }, fail));
   fanUnsubs.forEach(u=>u()); fanUnsubs=[]; fanJornadaId=null;
+  unsubs.push(F.onSnapshot(col("gastos"), s=>{ S.gastos=s.docs.map(d=>({id:d.id,...d.data()})); renderBote(); }, fail));
+  unsubs.push(F.onSnapshot(F.query(col("registro"), F.orderBy("creado","desc"), F.limit(60)), s=>{ S.registro=s.docs.map(d=>({id:d.id,...d.data()})); renderLog(); }, e=>console.warn(e)));
   unsubs.push(F.onSnapshot(col("planes"), s=>{ S.planes=s.docs.map(d=>({id:d.id,...d.data()})); syncPlanListeners(); renderPlanes(); }, fail));
   unsubs.push(F.onSnapshot(col("rivales"), s=>{ S.rivales=s.docs.map(d=>({id:d.id,...d.data()})); renderScouting(); renderAsis(); }, fail));
   let firstAv=true;

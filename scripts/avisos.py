@@ -105,9 +105,23 @@ def tokens_by_team():
     return by
 
 
+def notas_pendientes():
+    """Notas de scouting sin avisar de todos los equipos con UNA consulta (necesita un índice; si falta, None)."""
+    try:
+        por = {}
+        for n in db.collection_group("notas").where(filter=firestore.FieldFilter("notificada", "==", False)).stream():
+            team_id = n.reference.parent.parent.parent.parent.id
+            por.setdefault(team_id, []).append(n)
+        return por
+    except Exception as e:
+        print(f"::notice::Para gastar menos lecturas, crea el índice que pide Firebase: {str(e)[:300]}")
+        return None
+
+
 def avisar_multas():
     toks_team = None
     total = 0
+    pend_notas = notas_pendientes()
     for team in db.collection("equipos").stream():
         def toks(team_id=team.id):
             nonlocal toks_team
@@ -120,7 +134,10 @@ def avisar_multas():
         total += avisar_planes(team, toks)
         total += pagos_equipo(team, toks)
         total += aviso_fichajes(team, toks)
-        total += avisar_scouting(team, toks)
+        total += avisar_scouting(team, toks, None if pend_notas is None else pend_notas.get(team.id, []))
+        total += recordatorios_pago(team, toks)
+        total += avisar_convocatoria(team, toks)
+        total += cumpleanos(team, toks)
         total += previa_partido(team, toks)
         total += fantasy_equipo(team, toks)
         nuevas = list(team.reference.collection("multas")
@@ -591,13 +608,21 @@ def pagos_equipo(team, toks):
     return hecho
 
 
-def avisar_scouting(team, toks):
+def avisar_scouting(team, toks, pendientes=None):
     """Notas de scouting nuevas: a todo el equipo (también a quien la escribe), agrupadas por rival."""
     enviados = 0
-    for r in team.reference.collection("rivales").stream():
-        nuevas = list(r.reference.collection("notas").where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
-        if not nuevas:
-            continue
+    if pendientes is None:   # sin índice: se revisa rival por rival (más lecturas)
+        grupos = []
+        for r in team.reference.collection("rivales").stream():
+            nuevas = list(r.reference.collection("notas").where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
+            if nuevas:
+                grupos.append((r, nuevas))
+    else:
+        por_rival = {}
+        for n in pendientes:
+            por_rival.setdefault(n.reference.parent.parent.id, []).append(n)
+        grupos = [(team.reference.collection("rivales").document(rid).get(), ns) for rid, ns in por_rival.items()]
+    for r, nuevas in grupos:
         rv = r.to_dict() or {}
         plantilla = rv.get("plantilla") or {}
         notas = [n.to_dict() or {} for n in nuevas]
@@ -661,7 +686,7 @@ def sugerencias_semanales():
         return 0
     owner = str((db.collection("equipos").document("ONTINYENT").get().to_dict() or {}).get("propietario", "")).lower()
     sugs = [d.to_dict() or {} for d in pend]
-    body = " ".join(f"• {x.get('texto', '')[:70]} ({x.get('equipoNombre') or x.get('equipo') or '?'})" for x in sugs)
+    body = " ".join(f"• {x.get('texto', '')[:60]} ({nombre_corto(x.get('nombre'))}, {x.get('rol', '?')} · {x.get('equipoNombre') or x.get('equipo') or '?'})" for x in sugs)
     title = f"💡 {len(sugs)} sugerencia{'s' if len(sugs) != 1 else ''} de mejora esta semana"
     cache, mensajes = {}, []
     for tok, info in all_tokens():
@@ -726,6 +751,15 @@ def fantasy_equipo(team, toks):
                     for tok, info in tokens if info.get("jugador") in participantes | entrenadores]
             send_each(msgs, data={"tipo": "aviso"}, view="fantasy")
             upd["fanNotas"] = True
+        # B2) 8 h antes de que se cierren las notas: a quien aún no ha votado
+        if start + timedelta(hours=40) <= ahora < start + timedelta(hours=48) and not ev.get("fanNotasRec"):
+            votaron = {v.id for v in jref.collection("votos").stream()}
+            faltan = {pid for pid in participantes | entrenadores if email_de.get(pid) not in votaron}
+            fin = start + timedelta(hours=48)
+            msgs = [(tok, "⭐ Te quedan 8 horas para poner notas", f"Partido contra {rival}. Se cierra {hora_txt(fin, hoy)}.")
+                    for tok, info in tokens if info.get("jugador") in faltan]
+            send_each(msgs, data={"tipo": "aviso"}, view="fantasy")
+            upd["fanNotasRec"] = True
         # C) 48 h después: cerrar la jornada
         if start + timedelta(hours=48) <= ahora < start + timedelta(days=7) and not ev.get("fanCerrada"):
             fantasy_cerrar(team, d.id, ev, start, rival, jug, email_de, pid_de, participantes, presupuesto, tokens)
@@ -756,7 +790,8 @@ def fantasy_cerrar(team, evid, ev, start, rival, jug, email_de, pid_de, particip
         if ts and ts > limite_votos:
             continue
         yo = pid_de.get(v.id)
-        for pid, n in (x.get("notas") or {}).items():
+        es_entrenador = jug.get(yo, {}).get("rol") == "entrenador"
+        for pid, n in ({} if es_entrenador else (x.get("notas") or {})).items():
             if pid in notas and pid != yo and isinstance(n, (int, float)) and -2 <= n <= 10:
                 notas[pid].append(float(n))
         m = x.get("mvp")
@@ -803,6 +838,52 @@ def fantasy_cerrar(team, evid, ev, start, rival, jug, email_de, pid_de, particip
     body = " · ".join(partes) + ". Mira la clasificación."
     send_each([(tok, f"🏆 Fantasy · {rival}", body[:200]) for tok, _ in tokens], data={"tipo": "aviso"}, view="fantasy")
     print(f"::notice::Fantasy cerrado ({rival}): {len(alins)} quintetos, MVP {mvp}")
+
+
+def recordatorios_pago(team, toks):
+    """«Recordar pago» que pulsa el administrador: notificación solo a ese jugador."""
+    pend = list(team.reference.collection("recordatorios").where(filter=firestore.FieldFilter("enviado", "==", False)).stream())
+    for d in pend:
+        x = d.to_dict() or {}
+        msgs = [(tok, "💶 Tienes multas sin pagar", f"Debes {eur(x.get('importe'))}. Págaselas a quien lleva el conteo, en efectivo.")
+                for tok, info in toks() if info.get("jugador") == x.get("jugador")]
+        send_each(msgs, data={"tipo": "aviso"}, view="resumen")
+        d.reference.update({"enviado": True})
+    return len(pend)
+
+
+def avisar_convocatoria(team, toks):
+    """Convocatoria de partido: aviso a cada convocado."""
+    pend = list(team.reference.collection("eventos").where(filter=firestore.FieldFilter("convocAviso", "==", False)).stream())
+    hoy = datetime.now(TZ).date()
+    for d in pend:
+        ev = d.to_dict() or {}
+        conv = set(ev.get("convocados") or [])
+        rival = (ev.get("nota") or "").replace("en casa contra ", "").replace("fuera contra ", "") or "el rival"
+        body = f"Partido contra {rival} {cuando(ev, hoy)}." + (f" 📍 {ev['lugar']}" if ev.get("lugar") else "")
+        send_each([(tok, "📋 Estás convocado", body[:200]) for tok, info in toks() if info.get("jugador") in conv],
+                  data={"tipo": "evento"}, view="asistencia")
+        d.reference.update({"convocAviso": True})
+    return len(pend)
+
+
+def cumpleanos(team, toks):
+    """Desde las 9:00: aviso al equipo de los cumpleaños del día (una vez al día)."""
+    ahora = datetime.now(TZ)
+    hoy = ahora.date().isoformat()
+    t = team.to_dict() or {}
+    if ahora.hour < 9 or t.get("cumpleAviso") == hoy:
+        return 0
+    team.reference.update({"cumpleAviso": hoy})
+    hoy_md = hoy[5:]
+    cumple = [p.to_dict() or {} for p in team.reference.collection("jugadores").stream()]
+    cumple = [p for p in cumple if str(p.get("cumple", ""))[5:] == hoy_md and p.get("activo") is not False]
+    if not cumple:
+        return 0
+    nombres = " y ".join(nombre_corto(p.get("nombre")) for p in cumple)
+    send_each([(tok, f"🎂 ¡Hoy es el cumple de {nombres}!", "No te olvides de felicitarle 🎉") for tok, _ in toks()],
+              data={"tipo": "aviso"}, view="resumen")
+    return 1
 
 
 def aviso_fichajes(team, toks):
