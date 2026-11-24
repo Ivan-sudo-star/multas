@@ -9,6 +9,7 @@ y, opcionalmente, APP_URL (la dirección de la app, terminada en /).
 """
 import json
 import math
+import re
 import os
 import sys
 from datetime import date, datetime, time, timedelta
@@ -658,13 +659,25 @@ def previa_partido(team, toks):
         r = team.reference.collection("rivales").document(ev["rival"]).get()
         if not r.exists:
             continue
-        n = sum(1 for _ in r.reference.collection("notas").stream())
-        nombre = (r.to_dict() or {}).get("nombre", "el rival")
+        notas = [x.to_dict() or {} for x in r.reference.collection("notas").stream()]
+        n = len(notas)
+        rv = r.to_dict() or {}
+        nombre = rv.get("nombre", "el rival")
         hora = f" a las {ev['hora']}" if ev.get("hora") else ""
         title = f"🔎 Mañana{hora} contra {nombre}"
         body = (f"Hay {n} nota{'s' if n != 1 else ''} de scouting. Échales un vistazo antes del partido."
                 if n else "Todavía no hay notas de scouting. Si sabes algo de ellos, apúntalo en la app.")
-        send_each([(tok, title, body) for tok, _ in toks()], data={"tipo": "aviso"}, view="scouting")
+        mensajes = [(tok, title, body) for tok, _ in toks()]
+        # Partido de vuelta: lo que apuntamos después de la ida
+        ida = [x for x in sorted(notas, key=lambda x: x.get("creado") or 0) if x.get("partido")]
+        if ida:
+            txt = " · ".join(re.sub(r"^Tras el partido del [^:]+:\s*", "", x.get("texto", "")) for x in ida)
+            mensajes += [(tok, f"🔁 Para la vuelta contra {nombre}", ("En la ida apuntamos: " + txt)[:450]) for tok, _ in toks()]
+        # Claves de sus jugadores: notas con dorsal y el máximo anotador
+        claves = claves_rival(ev["rival"], rv, notas)
+        if claves:
+            mensajes += [(tok, f"👀 Claves de {nombre}", claves[:450]) for tok, _ in toks()]
+        send_each(mensajes, data={"tipo": "aviso"}, view="scouting")
         d.reference.update({"scoutPrevia": True})
         hechos += 1
     return hechos
@@ -889,6 +902,49 @@ def cumpleanos(team, toks):
     send_each([(tok, f"🎂 ¡Hoy es el cumple de {nombres}!", "No te olvides de felicitarle 🎉") for tok, _ in toks()],
               data={"tipo": "aviso"}, view="resumen")
     return 1
+
+
+_STATS = None
+
+
+def stats_fbcv():
+    """Estadísticas copiadas de la FBCV (docs/fbcv-stats.json del propio repositorio)."""
+    global _STATS
+    if _STATS is None:
+        try:
+            ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "fbcv-stats.json")
+            with open(ruta, encoding="utf-8") as f:
+                _STATS = json.load(f)
+        except Exception:
+            _STATS = {}
+    return _STATS
+
+
+def _clave(n):
+    import unicodedata
+    n = unicodedata.normalize("NFD", str(n or "").upper())
+    return " ".join("".join(c for c in n if unicodedata.category(c) != "Mn").replace(".", " ").split())
+
+
+def claves_rival(rid, rv, notas):
+    plantilla = rv.get("plantilla") or {}
+    partes = []
+    for x in sorted(notas, key=lambda x: x.get("creado") or 0):
+        j = plantilla.get(x.get("jugador") or "")
+        if not j:
+            continue
+        dor = f"#{j['dorsal']} " if j.get("dorsal") not in (None, "") else ""
+        partes.append(f"{dor}{nombre_corto(j.get('nombre'))}: {x.get('texto', '')}")
+    stats = (stats_fbcv().get("rivales") or {}).get(str(rid).replace("fbcv-", "")) or []
+    if stats:
+        top = max(stats, key=lambda s: s.get("pts", 0))
+        dor = ""
+        for j in plantilla.values():
+            a, b = _clave(j.get("nombre")), _clave(top.get("n"))
+            if a and (a == b or b.startswith(a + " ")) and j.get("dorsal") not in (None, ""):
+                dor = f"#{j['dorsal']} "
+        partes.append(f"Máximo anotador: {dor}{nombre_corto(top.get('n'))} ({top.get('pts')} pts/partido)")
+    return " · ".join(partes)
 
 
 def aviso_fichajes(team, toks):
