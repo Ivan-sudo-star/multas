@@ -21,12 +21,13 @@ catch { db = F.getFirestore(app); }
 
 /* ---------- utilidades ---------- */
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LOC = (()=>{ try{ return {va:"ca-ES",en:"en-GB"}[JSON.parse(localStorage.getItem("multas.idioma"))]||"es-ES"; }catch{ return "es-ES"; } })();
 const eur = n => (Math.round((+n||0)*100)/100).toLocaleString("es-ES",{maximumFractionDigits:2}) + " €";
 const pad = n => String(n).padStart(2,"0");
 const today = () => { const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); };
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const monthName = ym => { if(!ym) return ""; const [y,m]=ym.split("-"); return MESES[+m-1]+" de "+y; };
-const dayName = ymd => { try{ const [y,m,d]=ymd.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"}); }catch{ return ymd; } };
+const dayName = ymd => { try{ const [y,m,d]=ymd.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString(LOC,{weekday:"long",day:"numeric",month:"long"}); }catch{ return ymd; } };
 const store = {
   get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:JSON.parse(v); }catch{ return d; } },
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
@@ -187,7 +188,7 @@ function haceCuanto(ms){
   const m=Math.round((Date.now()-ms)/60000);
   if(m<1) return "ahora"; if(m<60) return "hace "+m+" min";
   const h=Math.round(m/60); if(h<24) return "hace "+h+" h";
-  return new Date(ms).toLocaleDateString("es-ES",{day:"numeric",month:"short"});
+  return new Date(ms).toLocaleDateString(LOC,{day:"numeric",month:"short"});
 }
 function renderAvisos(){
   const card=$("#avisosCard"); if(!card) return;
@@ -240,9 +241,9 @@ const pkey = p => String(p?.email||"").toLowerCase();
 const confirmOf = (ev,p) => p && p.email ? (ev.confirma||{})[pkey(p)] : undefined;
 const noteOf = (ev,p) => p && p.email ? String((ev.notas||{})[pkey(p)]||"") : "";
 const plazoCfg = () => { const p=S.aj.plazo||{}; return {activo:!!p.activo, aviso:+p.aviso||8, cierre:(p.cierre===0?0:(+p.cierre||3)), tipo:p.tipo||""}; };
-const fmtHora = ms => new Date(ms).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+const fmtHora = ms => new Date(ms).toLocaleTimeString(LOC,{hour:"2-digit",minute:"2-digit"});
 const fmtCierre = ms => { const d=new Date(ms), t=new Date(); const same=d.toDateString()===t.toDateString();
-  return (same?"hoy":d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric"}))+" a las "+fmtHora(ms); };
+  return (same?"hoy":d.toLocaleDateString(LOC,{weekday:"long",day:"numeric"}))+" a las "+fmtHora(ms); };
 // Cierre del plazo: entrenos de mañana (antes de las 14:00) → el día anterior a las 23:59; el resto → X horas antes
 const MANANA_HASTA = 14;
 function calcCierre(fecha, hora, horasAntes){
@@ -280,7 +281,7 @@ function renderAsis(){
   const per=asStats(); let te=[0,0], tp=[0,0];
   Object.values(per).forEach(r=>{ te[0]+=r.e[0]; te[1]+=r.e[1]; tp[0]+=r.p[0]; tp[1]+=r.p[1]; });
   $("#asEnt").textContent=pctTxt(te[0],te[1]); $("#asPar").textContent=pctTxt(tp[0],tp[1]);
-  const n0=next[0]; $("#asNext").textContent = n0 ? (n0.fecha===td?"Hoy":new Date(n0.fecha+"T12:00").toLocaleDateString("es-ES",{weekday:"short",day:"numeric"})) : "–";
+  const n0=next[0]; $("#asNext").textContent = n0 ? (n0.fecha===td?"Hoy":new Date(n0.fecha+"T12:00").toLocaleDateString(LOC,{weekday:"short",day:"numeric"})) : "–";
   $("#asSub").textContent = S.aj.inicio ? "Porcentajes desde "+monthName(S.aj.inicio)+". Cuentan como asistencia «vino» y «tarde»." : "Cuentan como asistencia «vino» y «tarde».";
   const loading='<li class="empty">'+(S.ready.e?"":"Cargando…")+'</li>';
   $("#evNextList").innerHTML = next.length ? next.map(ev=>evCard(ev,true)).join("") : (S.ready.e?'<li class="empty"><b>Nada programado</b>'+(S.canWrite?"Crea el próximo entreno o partido arriba.":"Cuando el entrenador cree un entreno o partido, aparecerá aquí.")+'</li>':loading);
@@ -301,7 +302,7 @@ function evCard(ev, upcoming){
   const myV = me ? confirmOf(ev,me) : undefined;
   let html=`<li class="ev ${ev.tipo==="partido"?"partido":""} ${ev.fecha===today()?"today":""}">
     <div class="evhead"><span class="evdate"><b>${d.getDate()}</b><span>${MESES[d.getMonth()].slice(0,3)}</span></span>
-      <span class="who"><b>${esc(evTitle(ev))}</b><span>${esc(d.toLocaleDateString("es-ES",{weekday:"long"}))}${ev.hora?" · "+esc(ev.hora):""}${ev.fecha===today()?" · hoy":""}${ev.lugar?"<br>📍 "+esc(ev.lugar):""}</span></span>
+      <span class="who"><b>${esc(evTitle(ev))}</b><span>${esc(d.toLocaleDateString(LOC,{weekday:"long"}))}${ev.hora?" · "+esc(ev.hora):""}${ev.fecha===today()?" · hoy":""}${ev.lugar?"<br>📍 "+esc(ev.lugar):""}</span></span>
       <span class="evcount">${count}</span></div>`;
   if(upcoming) html+=convHtml(ev);
   if(upcoming && ev.cierre) html+= isClosed(ev)
@@ -848,7 +849,7 @@ function pagoAviso(me){
   const ym=today().slice(0,7);
   const ahora=pend.filter(m=>mesCobro(m.fecha)<=ym); const tot=ahora.reduce((a,m)=>a+(+m.importe||0),0);
   if(!tot) return `<p class="note">💶 Tienes multas del final de mes: se pagan el mes que viene.</p>`;
-  const fin=finDeMes(ym).toLocaleDateString("es-ES",{day:"numeric",month:"long"});
+  const fin=finDeMes(ym).toLocaleDateString(LOC,{day:"numeric",month:"long"});
   return `<p class="note" style="color:var(--orange);font-weight:600">💶 Paga ${eur(tot)} antes del ${esc(fin)} o se aplicará ${recargoTxt(pg)} (${eur(recargoDe(pg,tot))}).</p>`;
 }
 function renderPagoCfg(){
@@ -1017,7 +1018,7 @@ function renderScouting(){
   const ord=[...rs].sort((a,b)=>{ const pa=prox(a.id), pb=prox(b.id); return (pa?pa.fecha:"9")<(pb?pb.fecha:"9")?-1:(pa?pa.fecha:"9")>(pb?pb.fecha:"9")?1:(a.nombre||"").localeCompare(b.nombre||""); });
   const corto=n=>String(n||"").replace(/^(C\.?B\.?|CB|CLUB)\s+/i,"").replace(/\s*-\s*.*$/,"").slice(0,22);
   $("#rivChips").innerHTML=ord.map(x=>{ const p=prox(x.id); const casa=p&&/en casa/i.test(p.nota||"");
-    return `<button type="button" class="rivchip" role="tab" aria-pressed="${x.id===S.rivalOpen}" data-riv="${esc(x.id)}"><b>${esc(corto(x.nombre))}</b><span>${p?esc(new Date(p.fecha+"T12:00").toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"short"}))+(p.nota?(casa?" · 🏠":" · ✈️"):""):"sin partido"}</span></button>`; }).join("");
+    return `<button type="button" class="rivchip" role="tab" aria-pressed="${x.id===S.rivalOpen}" data-riv="${esc(x.id)}"><b>${esc(corto(x.nombre))}</b><span>${p?esc(new Date(p.fecha+"T12:00").toLocaleDateString(LOC,{weekday:"short",day:"numeric",month:"short"}))+(p.nota?(casa?" · 🏠":" · ✈️"):""):"sin partido"}</span></button>`; }).join("");
   // selector en el formulario de partido
   const er=$("#evRival"); if(er){ const cur=er.value; er.innerHTML='<option value="">— Sin rival —</option>'+rs.map(r=>`<option value="${esc(r.id)}">${esc(r.nombre)}</option>`).join(""); er.value=cur; $("#evRivalWrap").hidden=$("#evTipo").value!=="partido"; }
   if(box.contains(document.activeElement) && document.activeElement.tagName!=="BUTTON") return;
@@ -1165,13 +1166,17 @@ $("#rivNew").addEventListener("submit",e=>{
 });
 
 
+/* ---------- recordatorio de renovar la FBCV (solo el propietario de la app) ---------- */
+async function fbcvFecha(){ try{ const d=await cargarFBCV(); const t=await F.getDoc(F.doc(db,"equipos",LEGACY_TEAM)); const m=[d?.copiado||"", t.data()?.fbcvRenovado||""].sort().pop();
+  $("#fbcvFecha").textContent = m ? "Última: "+new Date(m+"T12:00").toLocaleDateString(LOC,{day:"numeric",month:"short"}) : ""; }catch{} }
 /* ---------- sugerencias de mejora ---------- */
 let sugUnsub=null, appOwner=null;
 async function initSugerencias(){
   if(!S.user || !email()) { $("#sugAdmin").hidden=true; return; }
   try{ if(appOwner===null){ const t=await F.getDoc(F.doc(db,"equipos",LEGACY_TEAM)); appOwner=String(t.data()?.propietario||"").toLowerCase(); } }catch{ appOwner=""; }
   const soy = appOwner && appOwner===email();
-  $("#sugAdmin").hidden=!soy;
+  $("#sugAdmin").hidden=!soy; $("#fbcvCard").hidden=!soy;
+  if(soy) fbcvFecha();
   if(soy && !sugUnsub){
     sugUnsub=F.onSnapshot(F.collection(db,"sugerencias"), s=>{
       const list=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.hecha?1:0)-(b.hecha?1:0)||(b.creado||0)-(a.creado||0));
@@ -1531,7 +1536,7 @@ function renderFicha(){
   const st=statsPropias(p.nombre); const fan=S.fan?.clasificacion?.[p.id]; const precioF=(S.fan?.precios||{})[p.id];
   const puedoFoto = S.canWrite || myPlayer()?.id===p.id;
   box.innerHTML=`<div class="card"><div class="ficha-h">${p.foto?`<img class="ficha-foto" src="${esc(p.foto)}" alt="">`:`<span class="ficha-foto">${esc(avTxt(p))}</span>`}
-      <div><h2 style="margin:0">${esc(p.nombre)}</h2><span class="note">${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"}${hasDor(p)?" · #"+esc(p.dorsal):""}${p.cumple?" · 🎂 "+esc(new Date(p.cumple+"T12:00").toLocaleDateString("es-ES",{day:"numeric",month:"long"})):""}</span></div></div>
+      <div><h2 style="margin:0">${esc(p.nombre)}</h2><span class="note">${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"}${hasDor(p)?" · #"+esc(p.dorsal):""}${p.cumple?" · 🎂 "+esc(new Date(p.cumple+"T12:00").toLocaleDateString(LOC,{day:"numeric",month:"long"})):""}</span></div></div>
     ${puedoFoto?`<label class="f">Foto (opcional)<input type="file" id="fotoIn" accept="image/*"></label>`:""}</div>
   <div class="card"><h3>Esta temporada</h3><div class="kv">
     <div><small>Multas</small><b>${eur(T.t)}</b></div><div><small>Debe</small><b>${eur(T.p)}</b></div>
@@ -1555,7 +1560,7 @@ function historialFantasy(){
   const porEmail=Object.fromEntries(S.jug.filter(p=>p.email).map(p=>[pkey(p),p]));
   const gente=[...new Set(js.flatMap(j=>Object.keys(j.resultados||{})))];
   const filas=gente.map(em=>({p:porEmail[em], em, v:js.map(j=>(j.resultados||{})[em])})).sort((a,b)=>b.v.reduce((s,x)=>s+(x||0),0)-a.v.reduce((s,x)=>s+(x||0),0));
-  return `<div class="card"><h3>📅 Por jornadas</h3><div class="hist"><table><thead><tr><th>Participante</th>${js.map(j=>`<th>${esc(new Date(j.fecha+"T12:00").toLocaleDateString("es-ES",{day:"numeric",month:"short"}))}</th>`).join("")}</tr></thead><tbody>${filas.map(f=>`<tr><td>${esc(shortName(f.p?.nombre||f.em))}</td>${f.v.map(x=>`<td>${x==null?"–":x}</td>`).join("")}</tr>`).join("")}</tbody></table></div><p class="mini">Desde que el fantasy se juega en la app.</p></div>`;
+  return `<div class="card"><h3>📅 Por jornadas</h3><div class="hist"><table><thead><tr><th>Participante</th>${js.map(j=>`<th>${esc(new Date(j.fecha+"T12:00").toLocaleDateString(LOC,{day:"numeric",month:"short"}))}</th>`).join("")}</tr></thead><tbody>${filas.map(f=>`<tr><td>${esc(shortName(f.p?.nombre||f.em))}</td>${f.v.map(x=>`<td>${x==null?"–":x}</td>`).join("")}</tr>`).join("")}</tbody></table></div><p class="mini">Desde que el fantasy se juega en la app.</p></div>`;
 }
 function sparkline(pts){
   if(!pts||pts.length<2) return "";
@@ -1589,43 +1594,88 @@ function notaPartidoHtml(ev){
   if(ev.tipo!=="partido"||!ev.rival||!email()) return "";
   return `<div class="inl"><input type="text" id="np-${esc(ev.id)}" maxlength="300" placeholder="¿Qué funcionó y qué no? (para la vuelta)"><button type="button" class="btn small ghost" data-notapartido="${esc(ev.id)}">📝 Guardar</button></div>`;
 }
-// Pizarra de jugadas
-const PZ={modo:"mover", fichas:null, trazos:[], arrastra:null, trazo:null};
-function pzInit(){ if(!PZ.fichas) PZ.fichas=[...[0.5,0.15,0.85,0.25,0.75].map((x,i)=>({t:"a",n:i+1,x,y:[0.55,0.25,0.25,0.75,0.75][i]})), ...[0.5,0.3,0.7,0.35,0.65].map((x,i)=>({t:"d",n:i+1,x,y:[0.42,0.3,0.3,0.62,0.62][i]}))]; pzDraw(); }
-function pzDraw(){
-  const c=$("#pzCanvas"); if(!c) return; const g=c.getContext("2d"); const W=c.width,H=c.height;
-  const css=getComputedStyle(document.documentElement); const lin=css.getPropertyValue("--muted").trim()||"#888";
+// Pizarra de jugadas, por pasos. Cada paso guarda dónde está cada ficha y las flechas de lo que pasa en él.
+const PZ={modo:"mover", pasos:null, i:0, arrastra:null, trazo:null, abierta:null, anim:null};
+const pzCur=()=>PZ.pasos[PZ.i];
+function pzInicial(){ return {fichas:[...[0.5,0.15,0.85,0.25,0.75].map((x,i)=>({t:"a",n:i+1,x,y:[0.55,0.25,0.25,0.75,0.75][i]})), ...[0.5,0.3,0.7,0.35,0.65].map((x,i)=>({t:"d",n:i+1,x,y:[0.42,0.3,0.3,0.62,0.62][i]})), {t:"b",n:0,x:0.53,y:0.6}], trazos:[]}; }
+function pzInit(){ if(!PZ.pasos){ PZ.pasos=[pzInicial()]; PZ.i=0; } pzDraw(); }
+const pzCopia=st=>({fichas:st.fichas.map(f=>({...f})), trazos:st.trazos.map(t=>({k:t.k||"mov", p:[...t.p]}))});
+// La ficha que sale de cada flecha (la más cercana a su inicio)
+function pzDueno(st,t,c){ const W=c.width,H=c.height; let best=null,d=36;
+  st.fichas.forEach(f=>{ if((t.k==="pase")!==(f.t==="b")) return; const dd=Math.hypot((f.x-t.p[0])*W,(f.y-t.p[1])*H); if(dd<d){ d=dd; best=f; } }); return best; }
+function pzDraw(st){
+  const c=$("#pzCanvas"); if(!c||!PZ.pasos) return; st=st||pzCur(); const g=c.getContext("2d"); const W=c.width,H=c.height;
+  const css=getComputedStyle(document.documentElement); const lin=css.getPropertyValue("--muted").trim()||"#888"; const ink=css.getPropertyValue("--ink").trim()||"#17173d";
+  g.setLineDash([]); g.globalAlpha=1;
   g.clearRect(0,0,W,H); g.fillStyle=css.getPropertyValue("--orange-soft").trim()||"#fde7de"; g.fillRect(0,0,W,H);
   g.strokeStyle=lin; g.lineWidth=2;
-  g.strokeRect(4,4,W-8,H-8);                         // líneas exteriores
-  g.strokeRect(W/2-96,4,192,232);                    // zona
-  g.beginPath(); g.arc(W/2,236,72,0,Math.PI); g.stroke();   // tiros libres
-  g.beginPath(); g.moveTo(40,4); g.lineTo(40,120); g.arc(W/2,52,262,Math.PI-0.34,0.34,true); g.lineTo(W-40,4); g.stroke(); // triple
-  g.beginPath(); g.arc(W/2,52,14,0,2*Math.PI); g.stroke(); g.beginPath(); g.moveTo(W/2-36,36); g.lineTo(W/2+36,36); g.stroke(); // aro y tablero
-  g.beginPath(); g.arc(W/2,H-4,72,Math.PI,0); g.stroke();   // medio campo
-  const flecha=(pts)=>{ if(pts.length<4) return; g.beginPath(); g.moveTo(pts[0]*W,pts[1]*H); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i]*W,pts[i+1]*H); g.stroke();
+  g.strokeRect(4,4,W-8,H-8);
+  g.strokeRect(W/2-96,4,192,232);
+  g.beginPath(); g.arc(W/2,236,72,0,Math.PI); g.stroke();
+  g.beginPath(); g.moveTo(40,4); g.lineTo(40,120); g.arc(W/2,52,262,Math.PI-0.34,0.34,true); g.lineTo(W-40,4); g.stroke();
+  g.beginPath(); g.arc(W/2,52,14,0,2*Math.PI); g.stroke(); g.beginPath(); g.moveTo(W/2-36,36); g.lineTo(W/2+36,36); g.stroke();
+  g.beginPath(); g.arc(W/2,H-4,72,Math.PI,0); g.stroke();
+  const flecha=(t)=>{ const pts=t.p; if(pts.length<4) return; g.setLineDash(t.k==="pase"?[10,9]:[]); g.beginPath(); g.moveTo(pts[0]*W,pts[1]*H); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i]*W,pts[i+1]*H); g.stroke(); g.setLineDash([]);
     const n=pts.length; const x2=pts[n-2]*W,y2=pts[n-1]*H,x1=pts[Math.max(0,n-6)]*W,y1=pts[Math.max(1,n-5)]*H; const a=Math.atan2(y2-y1,x2-x1);
     g.beginPath(); g.moveTo(x2,y2); g.lineTo(x2-14*Math.cos(a-0.4),y2-14*Math.sin(a-0.4)); g.lineTo(x2-14*Math.cos(a+0.4),y2-14*Math.sin(a+0.4)); g.closePath(); g.fill(); };
-  g.strokeStyle=g.fillStyle=css.getPropertyValue("--ink").trim()||"#17173d"; g.lineWidth=4; g.lineCap="round"; g.lineJoin="round";
-  PZ.trazos.forEach(flecha); if(PZ.trazo) flecha(PZ.trazo);
-  PZ.fichas.forEach(f=>{ const x=f.x*W,y=f.y*H; g.lineWidth=3;
-    if(f.t==="a"){ g.fillStyle="#f03c02"; g.beginPath(); g.arc(x,y,22,0,2*Math.PI); g.fill(); g.fillStyle="#fff"; g.font="800 24px Inter, sans-serif"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(f.n,x,y+1); }
-    else { g.strokeStyle="#29297a"; g.lineWidth=5; g.beginPath(); g.moveTo(x-15,y-15); g.lineTo(x+15,y+15); g.moveTo(x+15,y-15); g.lineTo(x-15,y+15); g.stroke(); } });
+  // Paso anterior en transparente, para ver de dónde viene cada uno
+  if(!PZ.anim && PZ.i>0 && st===pzCur()){ g.globalAlpha=0.22; PZ.pasos[PZ.i-1].fichas.forEach(f=>pzFicha(g,f,W,H)); g.globalAlpha=1; }
+  g.strokeStyle=g.fillStyle=ink; g.lineWidth=4; g.lineCap="round"; g.lineJoin="round";
+  if(!PZ.anim||PZ.anim.pausa){ st.trazos.forEach(flecha); if(PZ.trazo) flecha(PZ.trazo); }
+  st.fichas.filter(f=>f.t!=="b").forEach(f=>pzFicha(g,f,W,H)); st.fichas.filter(f=>f.t==="b").forEach(f=>pzFicha(g,f,W,H));
+  const tx=$("#pzPaso"); if(tx) tx.textContent=`Paso ${PZ.i+1} de ${PZ.pasos.length}`;
+  const ant=$("#pzAnt"), sig=$("#pzSig"), qu=$("#pzQuitar"); if(ant){ ant.disabled=PZ.i===0||!!PZ.anim; sig.disabled=PZ.i>=PZ.pasos.length-1||!!PZ.anim; qu.disabled=PZ.pasos.length<2||!!PZ.anim; }
+  const pl=$("#pzPlay"); if(pl){ pl.textContent=PZ.anim?"⏹ Parar":"▶️ Reproducir"; pl.disabled=PZ.pasos.length<2 && !PZ.anim; }
 }
+function pzFicha(g,f,W,H){ const x=f.x*W,y=f.y*H; g.lineWidth=3; g.setLineDash([]);
+  if(f.t==="a"){ g.fillStyle="#f03c02"; g.beginPath(); g.arc(x,y,22,0,2*Math.PI); g.fill(); g.fillStyle="#fff"; g.font="800 24px Inter, sans-serif"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(f.n,x,y+1); }
+  else if(f.t==="b"){ g.fillStyle="#f5a623"; g.strokeStyle="#5a3200"; g.lineWidth=2; g.beginPath(); g.arc(x,y,11,0,2*Math.PI); g.fill(); g.stroke(); g.beginPath(); g.moveTo(x-11,y); g.lineTo(x+11,y); g.moveTo(x,y-11); g.lineTo(x,y+11); g.stroke(); }
+  else { g.strokeStyle="#29297a"; g.lineWidth=5; g.beginPath(); g.moveTo(x-15,y-15); g.lineTo(x+15,y+15); g.moveTo(x+15,y-15); g.lineTo(x-15,y+15); g.stroke(); } }
+// Quien lleva el balón (si no hay pase, el balón va con él)
+function pzPortador(st,c){ const b=st.fichas.find(f=>f.t==="b"); if(!b||st.trazos.some(t=>t.k==="pase"&&pzDueno(st,t,c)===b)) return null;
+  let best=null,d=40; st.fichas.forEach(f=>{ if(f.t!=="a") return; const dd=Math.hypot((f.x-b.x)*c.width,(f.y-b.y)*c.height); if(dd<d){ d=dd; best=f; } }); return best?{b,f:best}:null; }
+// Nuevo paso: las fichas con flecha ya aparecen donde acaba su flecha
+function pzNuevoPaso(){ const c=$("#pzCanvas"); const st=pzCur(); const nx=pzCopia(st); nx.trazos=[];
+  st.trazos.forEach(t=>{ const f=pzDueno(st,t,c); if(!f) return; const g=nx.fichas[st.fichas.indexOf(f)]; g.x=t.p[t.p.length-2]; g.y=t.p[t.p.length-1]; });
+  const po=pzPortador(st,c); if(po){ const nf=nx.fichas[st.fichas.indexOf(po.f)], nb=nx.fichas[st.fichas.indexOf(po.b)]; nb.x=Math.min(1,Math.max(0,po.b.x+nf.x-po.f.x)); nb.y=Math.min(1,Math.max(0,po.b.y+nf.y-po.f.y)); }
+  PZ.pasos.splice(PZ.i+1,0,nx); PZ.i++; pzDraw(); }
+// Reproducir: cada ficha recorre su flecha (o va en línea recta) hasta el siguiente paso
+function pzRuta(a,b,f0,f1,c){ const t=a.trazos.find(t=>pzDueno(a,t,c)===f0); const fin=[f1.x,f1.y];
+  if(t && Math.hypot((t.p[t.p.length-2]-f1.x)*c.width,(t.p[t.p.length-1]-f1.y)*c.height)<40) return [f0.x,f0.y,...t.p.slice(2,-2),...fin];
+  return [f0.x,f0.y,...fin]; }
+function pzEnRuta(r,u){ const seg=[]; let tot=0; for(let i=0;i+3<r.length;i+=2){ const l=Math.hypot(r[i+2]-r[i],r[i+3]-r[i+1]); seg.push(l); tot+=l; }
+  if(!tot) return [r[0],r[1]]; let d=u*tot; for(let i=0,k=0;k<seg.length;i+=2,k++){ if(d<=seg[k]||k===seg.length-1){ const q=seg[k]?Math.min(1,d/seg[k]):1; return [r[i]+(r[i+2]-r[i])*q, r[i+1]+(r[i+3]-r[i+1])*q]; } d-=seg[k]; } return [r[r.length-2],r[r.length-1]]; }
+function pzPlay(){ if(PZ.anim){ cancelAnimationFrame(PZ.anim.raf); PZ.anim=null; pzDraw(); return; }
+  const c=$("#pzCanvas"); const P=PZ.pasos; let k=0, t0=null; const DUR=1300, PAUSA=700; PZ.anim={raf:0};
+  const tick=ts=>{ if(!PZ.anim) return; if(t0===null) t0=ts; const el=ts-t0;
+    if(k>=P.length-1){ PZ.anim=null; PZ.i=P.length-1; pzDraw(); return; }
+    const a=P[k], b=P[k+1];
+    if(el<PAUSA){ PZ.anim.pausa=true; PZ.i=k; pzDraw(a); }
+    else { PZ.anim.pausa=false; const u=Math.min(1,(el-PAUSA)/DUR), e=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;
+      const po=pzPortador(a,c);
+      const st={fichas:a.fichas.map((f,j)=>{ const f1=b.fichas[j]||f; const [x,y]=pzEnRuta(pzRuta(a,b,f,f1,c),e); return {...f,x,y}; }), trazos:[]};
+      if(po){ const jf=a.fichas.indexOf(po.f), jb=a.fichas.indexOf(po.b), bf=b.fichas[jb];
+        if(bf && Math.hypot((bf.x-(po.b.x+b.fichas[jf].x-po.f.x))*c.width,(bf.y-(po.b.y+b.fichas[jf].y-po.f.y))*c.height)<30){ st.fichas[jb].x=po.b.x+st.fichas[jf].x-po.f.x; st.fichas[jb].y=po.b.y+st.fichas[jf].y-po.f.y; } }
+      pzDraw(st); if(u>=1){ k++; t0=ts; } }
+    PZ.anim.raf=requestAnimationFrame(tick); };
+  PZ.anim.raf=requestAnimationFrame(tick); pzDraw(); }
 function pzPos(e){ const c=$("#pzCanvas"), r=c.getBoundingClientRect(); return {x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)), y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}; }
 (function(){ const c=$("#pzCanvas"); if(!c) return;
-  c.addEventListener("pointerdown",e=>{ c.setPointerCapture(e.pointerId); const p=pzPos(e);
-    if(PZ.modo==="mover"){ PZ.arrastra=PZ.fichas.slice().reverse().find(f=>Math.hypot((f.x-p.x)*c.width,(f.y-p.y)*c.height)<30)||null; }
-    else PZ.trazo=[p.x,p.y]; });
-  c.addEventListener("pointermove",e=>{ const p=pzPos(e); if(PZ.arrastra){ PZ.arrastra.x=p.x; PZ.arrastra.y=p.y; pzDraw(); } else if(PZ.trazo){ const n=PZ.trazo.length; if(Math.hypot((PZ.trazo[n-2]-p.x)*c.width,(PZ.trazo[n-1]-p.y)*c.height)>8){ PZ.trazo.push(+p.x.toFixed(3),+p.y.toFixed(3)); pzDraw(); } } });
-  const fin=()=>{ if(PZ.trazo && PZ.trazo.length>=4) PZ.trazos.push(PZ.trazo); PZ.trazo=null; PZ.arrastra=null; pzDraw(); };
+  c.addEventListener("pointerdown",e=>{ if(PZ.anim||!PZ.pasos) return; c.setPointerCapture(e.pointerId); const p=pzPos(e);
+    if(PZ.modo==="mover"){ const fs=pzCur().fichas; PZ.arrastra=[...fs.filter(f=>f.t==="b"),...fs.filter(f=>f.t!=="b").reverse()].find(f=>Math.hypot((f.x-p.x)*c.width,(f.y-p.y)*c.height)<(f.t==="b"?22:30))||null; }
+    else PZ.trazo={k:PZ.modo==="pase"?"pase":"mov", p:[+p.x.toFixed(3),+p.y.toFixed(3)]}; });
+  c.addEventListener("pointermove",e=>{ const p=pzPos(e); if(PZ.arrastra){ PZ.arrastra.x=p.x; PZ.arrastra.y=p.y; pzDraw(); } else if(PZ.trazo){ const q=PZ.trazo.p, n=q.length; if(Math.hypot((q[n-2]-p.x)*c.width,(q[n-1]-p.y)*c.height)>8){ q.push(+p.x.toFixed(3),+p.y.toFixed(3)); pzDraw(); } } });
+  const fin=()=>{ if(PZ.trazo && PZ.trazo.p.length>=4){ if(PZ.trazo.k==="pase"){ const q=PZ.trazo.p; PZ.trazo.p=[q[0],q[1],q[q.length-2],q[q.length-1]]; } pzCur().trazos.push(PZ.trazo); } PZ.trazo=null; PZ.arrastra=null; pzDraw(); };
   c.addEventListener("pointerup",fin); c.addEventListener("pointercancel",fin);
 })();
+function pzDatos(){ return PZ.pasos.map(st=>({fichas:st.fichas.map(f=>({t:f.t,n:f.n,x:+(+f.x).toFixed(3),y:+(+f.y).toFixed(3)})), trazos:st.trazos.map(t=>({k:t.k||"mov",p:t.p}))})); }
+function pzCargar(j){ const pasos=j.pasos?.length?j.pasos:[{fichas:j.fichas||[],trazos:(j.trazos||[]).map(x=>({k:"mov",p:x.p}))}];
+  PZ.pasos=pasos.map(st=>{ const c=pzCopia({fichas:st.fichas||[],trazos:st.trazos||[]}); if(!c.fichas.some(f=>f.t==="b")) c.fichas.push({t:"b",n:0,x:0.53,y:0.6}); return c; }); PZ.i=0; PZ.abierta={id:j.id,nombre:j.nombre}; }
 function renderPizarra(){
   if(!$("#pzLista")) return;
   $("#pzGuardarRow").hidden=!S.canWrite;
   const l=[...(S.jugadas||[])].sort((a,b)=>(b.creado||0)-(a.creado||0));
-  $("#pzLista").innerHTML = l.length ? l.map(j=>`<li class="gasto"><span><b>${esc(j.nombre)}</b> <span class="mini">· ${esc(shortName(j.autor))}</span></span><span class="row"><button type="button" class="btn small" data-pzabrir="${esc(j.id)}">Abrir</button>${S.canWrite?`<button type="button" class="btn small danger" data-pzdel="${esc(j.id)}">✕</button>`:""}</span></li>`).join("") : '<li class="note">Todavía no hay jugadas guardadas.</li>';
+  $("#pzLista").innerHTML = l.length ? l.map(j=>`<li class="gasto"><span><b>${esc(j.nombre)}</b> <span class="mini">· ${j.pasos?.length||1} ${(j.pasos?.length||1)===1?"paso":"pasos"} · ${esc(shortName(j.autor))}</span></span><span class="row"><button type="button" class="btn small" data-pzabrir="${esc(j.id)}">Abrir</button>${S.canWrite?`<button type="button" class="btn small danger" data-pzdel="${esc(j.id)}">✕</button>`:""}</span></li>`).join("") : '<li class="note">Todavía no hay jugadas guardadas.</li>';
 }
 // Idiomas: traducción de los textos fijos de la app (menús, títulos y botones)
 const I18N={
@@ -1633,23 +1683,46 @@ const I18N={
  en:{"Resumen":"Summary","Historial":"History","Asistencia":"Attendance","Multa":"Fine","Scouting":"Scouting","Planes":"Plans","Ajustes":"Settings","Equipo":"Team","Clasificación de multas":"Fines ranking","Bote total":"Total pot","Por cobrar":"To collect","Cobrado":"Collected","Poner multa":"Add fine","Próximos":"Upcoming","Anteriores":"Past","Voy":"I'm in","No voy":"Can't go","Guardar":"Save","Borrar":"Delete","Quitar":"Remove","Cancelar":"Cancel","Pasar lista":"Take attendance","Avisar a todos ahora":"Notify everyone now","Crear":"Create","Tus multas":"Your fines","Ver mis multas":"See my fines","Copiar resumen para WhatsApp":"Copy summary for WhatsApp","Manual de uso":"User guide","Cuenta":"Account","Administradores":"Admins","Tipos de multa":"Fine types","Avisos":"Notices","Activar notificaciones":"Turn on notifications","Plantilla":"Roster","Añadir":"Add","Entrar":"Sign in","Salir":"Sign out","Crear cuenta":"Create account","Días que no puedo ir":"Days I can't make it","Guardar mis días":"Save my days","Nuevo entreno o partido":"New practice or game","Entreno":"Practice","Partido":"Game","Cobrada":"Paid","Pendiente":"Pending","Pantalla":"Display","Letra más grande":"Larger text","Idioma":"Language","Sugerir una mejora":"Suggest an improvement","Enviar sugerencia":"Send suggestion","Fantasy":"Fantasy","Reglas":"Rules","Clasificación":"Standings","Mercado":"Market","Pizarra":"Playbook","Liga · clasificación y resultados":"League · standings and results","Nuestros resultados":"Our results","Pagos":"Payments","Cobrar":"Collect","Descargar en Excel":"Download for Excel","Registro de cambios":"Change log","El bote":"The pot","Convocar":"Call up","Cómo llegar":"Directions","Lista":"List","Calendario":"Calendar","Esta temporada":"This season","Volver":"Back","Privacidad y datos":"Privacy and data"}
 };
 let lang=store.get("multas.idioma","es"), traduciendo=false;
-const ORIG=new WeakMap();
+const ORIG=new WeakMap(), ORIGA=new WeakMap();
+const normI=s=>s.replace(/\s+/g," ").trim();
+function claveI(s){ const k=normI(s); const m=k.match(/^[^\p{L}]*/u)[0]; return [m, k.slice(m.length).trim()]; }
+function trTexto(o,dic){
+  const k=o.trim(); if(!k) return null;
+  const [pre,limpio]=claveI(k); let tr=dic[limpio];
+  if(!tr && /[.:]$/.test(limpio)){ const b=dic[limpio.slice(0,-1)]; if(b) tr=b+limpio.slice(-1); }
+  if(!tr) for(const [re,f] of (I18N_RE[lang]||[])){ const m=limpio.match(re); if(m){ tr=f(m); break; } }
+  if(!tr) return null;
+  return o.replace(k, pre.replace(/[¿¡]/g,"")+tr);
+}
+fetch("i18n.json").then(r=>r.json()).then(d=>{ for(const l of ["va","en"]) Object.assign(I18N[l], d[l], {...I18N[l]}); if(lang!=="es") traducir(); }).catch(()=>{});
 function traducir(root=document.body){
   if(lang==="es" && !root.__trad) return;
   const dic=I18N[lang]||{}; traduciendo=true;
-  const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const base=root.nodeType===3?root.parentElement:root; if(!base){ traduciendo=false; return; }
+  const w=document.createTreeWalker(base, NodeFilter.SHOW_TEXT);
   for(let n; (n=w.nextNode());){
-    if(n.parentElement?.closest("textarea,script,style,#histList .t,.nota,.aviso p,.sug p")) continue;
-    const o=ORIG.has(n)?ORIG.get(n):n.nodeValue; const k=o.trim(); if(!k) continue;
-    const limpio=k.replace(/^[^\p{L}]+/u,"").trim(); const pre=k.slice(0,k.length-limpio.length);
-    const tr=dic[limpio]; if(tr){ if(!ORIG.has(n)) ORIG.set(n,o); n.nodeValue=o.replace(k, pre+tr); } else if(ORIG.has(n) && lang==="es"){ n.nodeValue=ORIG.get(n); }
+    if(n.parentElement?.closest("textarea,script,style,#histList .t,.nota,.aviso p,.sug p,[data-noi18n]")) continue;
+    const g=ORIG.get(n); const o=(g && n.nodeValue===g.r)?g.o:n.nodeValue;
+    const r=lang==="es"?null:trTexto(o,dic);
+    if(r){ ORIG.set(n,{o,r}); if(n.nodeValue!==r) n.nodeValue=r; }
+  }
+  if(base.querySelectorAll) for(const el of [base,...base.querySelectorAll("[placeholder],[title],[aria-label]")]){
+    if(!el.getAttribute) continue;
+    const g=ORIGA.get(el)||{}; let cambio=false;
+    for(const a of ["placeholder","title","aria-label"]){ const v=g[a]??el.getAttribute(a); if(!v) continue; const r=trTexto(v,dic); if(r){ g[a]=v; cambio=true; if(el.getAttribute(a)!==r) el.setAttribute(a,r); } }
+    if(cambio) ORIGA.set(el,g);
   }
   document.body.__trad=true; traduciendo=false;
 }
-const obsI18n=new MutationObserver(ms=>{ if(traducir&&!traduciendo&&lang!=="es") ms.forEach(m=>m.addedNodes.forEach(nd=>{ if(nd.nodeType===1) traducir(nd); })); });
-obsI18n.observe(document.body,{childList:true,subtree:true});
+// Frases que cambian (números, nombres, fechas)
+const I18N_RE={
+  va:[[/^Debe (.+)$/,m=>"Deu "+m[1]],[/^Contesta antes de (.+)$/,m=>"Contesta abans de "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" multa":" multes")],[/^(\d+) jugadores$/,m=>m[1]+" jugadors"],[/^Jornada (\d+)$/,m=>"Jornada "+m[1]],[/^Guardado$/,()=>"Guardat"],[/^Hecho$/,()=>"Fet"],[/^Sin conexión.*$/,()=>"Sense connexió"],[/^(\d+) van?$/,m=>m[1]+" van"],[/^(\d+) no van?$/,m=>m[1]+" no van"],[/^Paso (\d+) de (\d+)$/,m=>`Pas ${m[1]} de ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Jugada guardada (${m[1]} ${m[1]==="1"?"pas":"passos"})`],[/^Jugada: (.+)$/,m=>"Jugada: "+m[1]],[/^Última: (.+)$/,m=>"Última: "+m[1]],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" pas":" passos")+(m[2]||"")]],
+  en:[[/^Debe (.+)$/,m=>"Owes "+m[1]],[/^Contesta antes de (.+)$/,m=>"Answer before "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" fine":" fines")],[/^(\d+) jugadores$/,m=>m[1]+" players"],[/^Jornada (\d+)$/,m=>"Round "+m[1]],[/^Guardado$/,()=>"Saved"],[/^Hecho$/,()=>"Done"],[/^Sin conexión.*$/,()=>"Offline"],[/^(\d+) van?$/,m=>m[1]+" going"],[/^(\d+) no van?$/,m=>m[1]+" not going"],[/^Paso (\d+) de (\d+)$/,m=>`Step ${m[1]} of ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Play saved (${m[1]} ${m[1]==="1"?"step":"steps"})`],[/^Jugada: (.+)$/,m=>"Play: "+m[1]],[/^Última: (.+)$/,m=>"Last: "+m[1]],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" step":" steps")+(m[2]||"")]]
+};
+const obsI18n=new MutationObserver(ms=>{ if(traducir&&!traduciendo&&lang!=="es") ms.forEach(m=>{ if(m.type==="characterData") traducir(m.target); else m.addedNodes.forEach(nd=>{ if(nd.nodeType===1||nd.nodeType===3) traducir(nd); }); }); });
+obsI18n.observe(document.body,{childList:true,subtree:true,characterData:true});
 $("#idioma").value=lang; $("#idiomaNota").hidden=lang==="es";
-$("#idioma").addEventListener("change",e=>{ lang=e.target.value; store.set("multas.idioma",lang); $("#idiomaNota").hidden=lang==="es"; document.documentElement.lang=lang==="va"?"ca":lang; if(lang==="es") location.reload(); else traducir(); });
+$("#idioma").addEventListener("change",e=>{ lang=e.target.value; store.set("multas.idioma",lang); $("#idiomaNota").hidden=lang==="es"; document.documentElement.lang=lang==="va"?"ca":lang; location.reload(); });
 if(lang!=="es"){ document.documentElement.lang=lang==="va"?"ca":lang; setTimeout(()=>traducir(),300); }
 
 function handleTanda2(t,d){
@@ -1661,13 +1734,22 @@ function handleTanda2(t,d){
   if(t.id==="fanTarjeta"){ tarjetaFantasy(); return true; }
   if(d.notapartido){ const ev=evById(d.notapartido); const i=document.getElementById("np-"+d.notapartido); const v=(i?.value||"").trim(); if(!v){ toast("Escribe la nota"); return true; }
     i.value=""; i.blur();
-    run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",ev.rival,"notas"),{jugador:"", partido:ev.id, texto:("Tras el partido del "+new Date(ev.fecha+"T12:00").toLocaleDateString("es-ES",{day:"numeric",month:"short"})+": "+v).slice(0,500), autor:email(), nombre:myName(), creado:Date.now(), notificada:false}),"Nota guardada en el scouting del rival"); return true; }
+    run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",ev.rival,"notas"),{jugador:"", partido:ev.id, texto:("Tras el partido del "+new Date(ev.fecha+"T12:00").toLocaleDateString(LOC,{day:"numeric",month:"short"})+": "+v).slice(0,500), autor:email(), nombre:myName(), creado:Date.now(), notificada:false}),"Nota guardada en el scouting del rival"); return true; }
   if(d.pzmodo){ PZ.modo=d.pzmodo; document.querySelectorAll("[data-pzmodo]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.pzmodo===PZ.modo)); return true; }
-  if(t.id==="pzDeshacer"){ PZ.trazos.pop(); pzDraw(); return true; }
-  if(t.id==="pzLimpiar"){ PZ.fichas=null; PZ.trazos=[]; pzInit(); return true; }
+  if(t.id==="fbcvHecho"){ const hoy=new Date(); const ymd=hoy.getFullYear()+"-"+String(hoy.getMonth()+1).padStart(2,"0")+"-"+String(hoy.getDate()).padStart(2,"0");
+    run(()=>F.updateDoc(F.doc(db,"equipos",LEGACY_TEAM),{fbcvRenovado:ymd}),"Hecho. No te llegarán más recordatorios esta semana").then(()=>fbcvFecha()); return true; }
+  if(t.id==="pzDeshacer"){ if(PZ.anim) return true; pzCur().trazos.pop(); pzDraw(); return true; }
+  if(t.id==="pzLimpiar"){ if(PZ.anim) pzPlay(); PZ.pasos=null; PZ.abierta=null; $("#pzNombre").value=""; pzInit(); return true; }
+  if(t.id==="pzNuevo"){ if(!PZ.anim) pzNuevoPaso(); return true; }
+  if(t.id==="pzAnt"){ if(PZ.i>0){ PZ.i--; pzDraw(); } return true; }
+  if(t.id==="pzSig"){ if(PZ.i<PZ.pasos.length-1){ PZ.i++; pzDraw(); } return true; }
+  if(t.id==="pzQuitar"){ if(PZ.pasos.length>1){ armed(t,"¿Quitar este paso?",()=>{ PZ.pasos.splice(PZ.i,1); PZ.i=Math.min(PZ.i,PZ.pasos.length-1); pzDraw(); }); } return true; }
+  if(t.id==="pzPlay"){ pzPlay(); return true; }
   if(t.id==="pzGuardar"){ const nombre=$("#pzNombre").value.trim(); if(!nombre){ toast("Ponle un nombre a la jugada"); return true; }
-    run(()=>F.addDoc(col("jugadas"),{nombre, fichas:PZ.fichas.map(f=>({t:f.t,n:f.n,x:+f.x.toFixed(3),y:+f.y.toFixed(3)})), trazos:PZ.trazos.map(tr=>({p:tr})), autor:myName(), creado:Date.now()}),"Jugada guardada").then(ok=>{ if(ok) $("#pzNombre").value=""; }); return true; }
-  if(d.pzabrir){ const j=(S.jugadas||[]).find(x=>x.id===d.pzabrir); if(j){ PZ.fichas=j.fichas.map(f=>({...f})); PZ.trazos=(j.trazos||[]).map(x=>x.p); pzDraw(); window.scrollTo({top:0,behavior:"smooth"}); toast("Jugada: "+j.nombre); } return true; }
+    const datos={nombre, pasos:pzDatos(), autor:myName(), creado:Date.now()};
+    const misma=PZ.abierta && PZ.abierta.nombre===nombre;
+    run(()=>misma?F.setDoc(F.doc(col("jugadas"),PZ.abierta.id),datos):F.addDoc(col("jugadas"),datos).then(r=>{ PZ.abierta={id:r.id,nombre}; return r; }), misma?"Jugada actualizada":`Jugada guardada (${PZ.pasos.length} ${PZ.pasos.length===1?"paso":"pasos"})`); return true; }
+  if(d.pzabrir){ const j=(S.jugadas||[]).find(x=>x.id===d.pzabrir); if(j){ if(PZ.anim) pzPlay(); pzCargar(j); $("#pzNombre").value=j.nombre||""; pzDraw(); window.scrollTo({top:0,behavior:"smooth"}); toast("Jugada: "+j.nombre); } return true; }
   if(d.pzdel){ armed(t,"¿Borrar?",()=>run(()=>F.deleteDoc(F.doc(col("jugadas"),d.pzdel)),"Jugada borrada")); return true; }
   return false;
 }

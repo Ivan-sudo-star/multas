@@ -154,6 +154,7 @@ def avisar_multas():
             batch.update(d.reference, {"notificada": True})
         batch.commit()
     total += sugerencias_semanales()
+    total += recordatorio_fbcv()
     if not total:
         print("::notice::Nada que avisar")
 
@@ -699,6 +700,51 @@ def previa_partido(team, toks):
         d.reference.update({"scoutPrevia": True})
         hechos += 1
     return hechos
+
+
+def tokens_propietario():
+    """Móviles del propietario de la app (propietario del equipo ONTINYENT)."""
+    owner = str((db.collection("equipos").document("ONTINYENT").get().to_dict() or {}).get("propietario", "")).lower()
+    if not owner:
+        return []
+    cache, out = {}, []
+    for tok, info in all_tokens():
+        team = info.get("equipo") or LEGACY_TEAM
+        if team not in cache:
+            cache[team] = {p.id: str((p.to_dict() or {}).get("email", "")).lower()
+                           for p in db.collection("equipos").document(team).collection("jugadores").stream()}
+        if cache[team].get(info.get("jugador", "")) == owner:
+            out.append(tok)
+    return out
+
+
+def recordatorio_fbcv():
+    """Lunes desde las 10:00: recordar al propietario que renueve los datos de la FBCV.
+    Si a los 2 días no está hecho, se repite (cada 2 días hasta el domingo)."""
+    ahora = datetime.now(TZ)
+    if ahora.hour < 10:
+        return 0
+    hoy = ahora.date()
+    lunes = (hoy - timedelta(days=hoy.weekday())).isoformat()
+    eq = db.collection("equipos").document("ONTINYENT").get().to_dict() or {}
+    hecho = max(str(stats_fbcv().get("copiado", "")), str(eq.get("fbcvRenovado", "")))
+    if hecho >= lunes:
+        return 0
+    est_ref = db.collection("app").document("estado")
+    est = est_ref.get().to_dict() or {}
+    ultimo = str(est.get("fbcvAviso", ""))
+    if ultimo >= lunes and (hoy - date.fromisoformat(ultimo)).days < 2:
+        return 0
+    segundo = ultimo >= lunes
+    est_ref.set({"fbcvAviso": hoy.isoformat()}, merge=True)
+    toks = tokens_propietario()
+    if not toks:
+        return 0
+    title = "🔄 Recuerda: renovar datos de la FBCV" if segundo else "🔄 Toca renovar los datos de la FBCV"
+    body = ("Aún no está hecho. " if segundo else "") + \
+        "Estadísticas, clasificación y plantillas de cada jugador. Cuando esté, pulsa «Ya está renovado» en Ajustes."
+    send_each([(t, title, body) for t in toks], data={"tipo": "aviso"}, view="ajustes")
+    return 1
 
 
 def sugerencias_semanales():

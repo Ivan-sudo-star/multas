@@ -355,3 +355,7 @@ html.grande body{zoom:1.12}
 .res b{white-space:nowrap}
 .aviso.adm-av{background:var(--navy-soft,var(--chip));box-shadow:inset 3px 0 0 var(--navy)}
 .seg [data-avpara][aria-pressed="true"],.seg [data-vista][aria-pressed="true"],.seg [data-pzmodo][aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+
+.pzpasos{align-items:center;gap:6px}
+.pzpasos #pzPaso{min-width:90px;text-align:center}
+.pzpasos .btn:disabled{opacity:.4}
