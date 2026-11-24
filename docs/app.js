@@ -1603,9 +1603,19 @@ const pzBalon=k=>k==="pase"||k==="mano";
 function pzInicial(){ return {fichas:[...[0.5,0.15,0.85,0.25,0.75].map((x,i)=>({t:"a",n:i+1,x,y:[0.55,0.25,0.25,0.75,0.75][i]})), ...[0.5,0.3,0.7,0.35,0.65].map((x,i)=>({t:"d",n:i+1,x,y:[0.42,0.3,0.3,0.62,0.62][i]})), {t:"b",n:0,x:0.53,y:0.6}], trazos:[]}; }
 function pzInit(){ if(!PZ.pasos){ PZ.pasos=[pzInicial()]; PZ.i=0; } pzDraw(); }
 const pzCopia=st=>({fichas:st.fichas.map(f=>({...f})), trazos:st.trazos.map(t=>({k:t.k||"mov", p:[...t.p]}))});
-// La ficha que sale de cada flecha (la más cercana a su inicio)
-function pzDueno(st,t,c){ if(t.k==="opc") return null; const W=c.width,H=c.height; let best=null,d=36;
-  st.fichas.forEach(f=>{ if(pzBalon(t.k)!==(f.t==="b")) return; const dd=Math.hypot((f.x-t.p[0])*W,(f.y-t.p[1])*H); if(dd<d){ d=dd; best=f; } }); return best; }
+// De dónde sale cada flecha: de una ficha, o del final de otra flecha (así se encadenan, p. ej. bloqueo y continuación)
+function pzPadre(st,t,c){ if(t.k==="opc") return null; const W=c.width,H=c.height, bal=pzBalon(t.k); let best=null,d=36;
+  st.fichas.forEach(f=>{ if(bal!==(f.t==="b")) return; const dd=Math.hypot((f.x-t.p[0])*W,(f.y-t.p[1])*H); if(dd<d){ d=dd; best={f}; } });
+  st.trazos.forEach(u=>{ if(u===t||u.k==="opc"||pzBalon(u.k)!==bal) return; const n=u.p.length; const dd=Math.hypot((u.p[n-2]-t.p[0])*W,(u.p[n-1]-t.p[1])*H); if(dd<=d){ d=dd; best={t:u}; } });
+  return best; }
+// La ficha que sale de cada flecha (siguiendo la cadena hacia atrás)
+function pzDueno(st,t,c){ const vistos=new Set(); let x=t;
+  while(x && !vistos.has(x)){ vistos.add(x); const p=pzPadre(st,x,c); if(!p) return null; if(p.f) return p.f; x=p.t; } return null; }
+// Recorrido completo de una ficha en un paso: sus flechas encadenadas, en orden
+function pzCadena(st,f,c){ let t=st.trazos.find(u=>{ const p=pzPadre(st,u,c); return p&&p.f===f; }); if(!t) return null;
+  const pts=[...t.p], vistos=new Set([t]);
+  for(;;){ const sig=st.trazos.find(u=>!vistos.has(u)&&pzPadre(st,u,c)?.t===t); if(!sig) break; vistos.add(sig); pts.push(...sig.p.slice(2)); t=sig; }
+  return pts; }
 function pzDraw(st){
   const c=$("#pzCanvas"); if(!c||!PZ.pasos) return; st=st||pzCur(); const g=c.getContext("2d"); const W=c.width,H=c.height;
   const css=getComputedStyle(document.documentElement); const lin=css.getPropertyValue("--muted").trim()||"#888"; const ink=css.getPropertyValue("--ink").trim()||"#17173d";
@@ -1653,12 +1663,12 @@ function pzPortador(st,c){ const b=st.fichas.find(f=>f.t==="b"); if(!b||st.trazo
   let best=null,d=40; st.fichas.forEach(f=>{ if(f.t!=="a") return; const dd=Math.hypot((f.x-b.x)*c.width,(f.y-b.y)*c.height); if(dd<d){ d=dd; best=f; } }); return best?{b,f:best}:null; }
 // Nuevo paso: las fichas con flecha ya aparecen donde acaba su flecha
 function pzNuevoPaso(){ const c=$("#pzCanvas"); const st=pzCur(); const nx=pzCopia(st); nx.trazos=[];
-  st.trazos.forEach(t=>{ const f=pzDueno(st,t,c); if(!f) return; const g=nx.fichas[st.fichas.indexOf(f)]; g.x=t.p[t.p.length-2]; g.y=t.p[t.p.length-1]; });
+  st.fichas.forEach((f,j)=>{ const r=pzCadena(st,f,c); if(!r) return; nx.fichas[j].x=r[r.length-2]; nx.fichas[j].y=r[r.length-1]; });
   const po=pzPortador(st,c); if(po){ const nf=nx.fichas[st.fichas.indexOf(po.f)], nb=nx.fichas[st.fichas.indexOf(po.b)]; nb.x=Math.min(1,Math.max(0,po.b.x+nf.x-po.f.x)); nb.y=Math.min(1,Math.max(0,po.b.y+nf.y-po.f.y)); }
   PZ.pasos.splice(PZ.i+1,0,nx); PZ.i++; pzDraw(); }
 // Reproducir: cada ficha recorre su flecha (o va en línea recta) hasta el siguiente paso
-function pzRuta(a,b,f0,f1,c){ const t=a.trazos.find(t=>pzDueno(a,t,c)===f0); const fin=[f1.x,f1.y];
-  if(t && Math.hypot((t.p[t.p.length-2]-f1.x)*c.width,(t.p[t.p.length-1]-f1.y)*c.height)<40) return [f0.x,f0.y,...t.p.slice(2,-2),...fin];
+function pzRuta(a,b,f0,f1,c){ const r=pzCadena(a,f0,c); const fin=[f1.x,f1.y];
+  if(r && Math.hypot((r[r.length-2]-f1.x)*c.width,(r[r.length-1]-f1.y)*c.height)<40) return [f0.x,f0.y,...r.slice(2,-2),...fin];
   return [f0.x,f0.y,...fin]; }
 function pzEnRuta(r,u){ const seg=[]; let tot=0; for(let i=0;i+3<r.length;i+=2){ const l=Math.hypot(r[i+2]-r[i],r[i+3]-r[i+1]); seg.push(l); tot+=l; }
   if(!tot) return [r[0],r[1]]; let d=u*tot; for(let i=0,k=0;k<seg.length;i+=2,k++){ if(d<=seg[k]||k===seg.length-1){ const q=seg[k]?Math.min(1,d/seg[k]):1; return [r[i]+(r[i+2]-r[i])*q, r[i+1]+(r[i+3]-r[i+1])*q]; } d-=seg[k]; } return [r[r.length-2],r[r.length-1]]; }
