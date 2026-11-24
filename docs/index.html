@@ -135,6 +135,8 @@
     <div class="stat"><small>Partidos</small><strong id="asPar">–</strong></div>
     <div class="stat"><small>Próximo</small><strong id="asNext">–</strong></div>
   </div>
+  <div class="seg" role="tablist" style="margin-top:4px"><button type="button" id="vistaLista" data-vista="lista" aria-pressed="true">☰ Lista</button><button type="button" id="vistaCal" data-vista="cal" aria-pressed="false">🗓️ Calendario</button></div>
+  <div class="card" id="calBox" hidden></div>
   <form id="evForm" class="card" novalidate hidden>
     <h3>Nuevo entreno o partido</h3>
     <div class="row">
@@ -183,6 +185,8 @@
 <!-- SCOUTING -->
 <section id="v-scouting" class="view" hidden><div class="wrap">
   <div><h2>🔎 Scouting</h2><p class="sub">Plantillas de los rivales e información de cada jugador. La ve todo el equipo.</p></div>
+  <details class="card" id="ligaCard"><summary class="who-line" style="cursor:pointer;list-style:none"><h3>🏆 Liga · clasificación y resultados</h3><span class="mini" id="ligaPos"></span></summary><div id="ligaBox"></div></details>
+  <a class="card scoutlink" href="#pizarra"><b>🧠 Pizarra de jugadas</b><span class="note">Dibuja sistemas y jugadas sobre la pista y guárdalos</span></a>
   <div class="rivchips" id="rivChips" role="tablist" aria-label="Rivales"></div>
   <label class="f" hidden>Rival<select id="rivSel"></select></label>
   <div id="rivBox"></div>
@@ -227,6 +231,19 @@
   </details>
 </div></section>
 
+<!-- FICHA DE JUGADOR -->
+<section id="v-ficha" class="view" hidden><div class="wrap"><a href="#resumen" class="note" id="fichaVolver">← Volver</a><div id="fichaBox"></div></div></section>
+
+<!-- PIZARRA -->
+<section id="v-pizarra" class="view" hidden><div class="wrap">
+  <div><a href="#scouting" class="note">← Scouting</a><h2>🧠 Pizarra</h2><p class="sub">Arrastra las fichas. En modo «Dibujar», traza movimientos y pases con el dedo.</p></div>
+  <div class="row"><div class="seg"><button type="button" data-pzmodo="mover" aria-pressed="true">✋ Mover</button><button type="button" data-pzmodo="dibujar" aria-pressed="false">✏️ Dibujar</button></div>
+    <button type="button" class="btn small ghost" id="pzDeshacer">↶ Deshacer</button><button type="button" class="btn small ghost" id="pzLimpiar">🧹 Empezar de cero</button></div>
+  <div class="pizbox"><canvas id="pzCanvas" width="600" height="560" aria-label="Media pista de baloncesto"></canvas></div>
+  <div class="row" id="pzGuardarRow"><label class="f">Nombre de la jugada<input type="text" id="pzNombre" maxlength="40" placeholder="Ej.: Cuernos · bloqueo para el 2"></label><button type="button" class="btn small" id="pzGuardar">💾 Guardar</button></div>
+  <div class="card"><h3>Jugadas guardadas</h3><ul class="list" id="pzLista"></ul></div>
+</div></section>
+
 <!-- HISTORIAL -->
 <section id="v-historial" class="view" hidden><div class="wrap">
   <div><h2>Historial</h2><p class="sub">Las multas se pagan en efectivo. Marca cada una como cobrada cuando te den el dinero.</p></div>
@@ -268,6 +285,8 @@
   <div class="card" id="pantallaCard">
     <h3>🔠 Pantalla</h3>
     <label class="switch"><span>Letra más grande</span><input type="checkbox" id="letraGrande"></label>
+    <label class="f" style="max-width:240px">Idioma<select id="idioma"><option value="es">Castellano</option><option value="va">Valencià</option><option value="en">English</option></select></label>
+    <span class="note" id="idiomaNota" hidden>Traducidos los menús, títulos y botones principales. Los textos que escribe el equipo no se traducen.</span>
   </div>
   <div class="card" id="cumpleCard" hidden>
     <h3>🎂 Tu cumpleaños</h3>

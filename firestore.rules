@@ -53,8 +53,9 @@ service cloud.firestore {
         ) || (
           // Cada jugador puede guardar sus días fijos de «no puedo ir»
           hasEmail() && resource.data.get('email', '') == myEmail() &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diasNo', 'diasNota', 'cumple']) &&
-          request.resource.data.get('diasNo', []) is list && request.resource.data.get('diasNo', []).size() <= 7
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['diasNo', 'diasNota', 'cumple', 'foto']) &&
+          request.resource.data.get('diasNo', []) is list && request.resource.data.get('diasNo', []).size() <= 7 &&
+          request.resource.data.get('foto', '').size() < 80000
         );
       }
       match /tipos/{id}  { allow read: if signedIn(); allow write: if isAdminOf(e); }
@@ -119,6 +120,7 @@ service cloud.firestore {
 
       // Gastos del bote, registro de cambios y recordatorios de pago: los escriben los administradores
       match /gastos/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
+      match /jugadas/{id} { allow read: if signedIn(); allow write: if isAdminOf(e); }
       match /registro/{id} { allow read: if signedIn(); allow create: if isAdminOf(e); allow update, delete: if false; }
       match /recordatorios/{id} { allow read, create: if isAdminOf(e); allow update, delete: if false; }
 

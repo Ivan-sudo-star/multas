@@ -111,7 +111,7 @@ const isNew = m => (m.creado||0) > S.lastSeen && m.autor !== (S.user&&S.user.uid
 function totals(list){ let t=0,p=0; list.forEach(m=>{ t+=+m.importe||0; if(!m.pagada) p+=+m.importe||0; }); return {t, p, c:t-p}; }
 
 /* ---------- navegación ---------- */
-const VIEWS=["resumen","asistencia","anadir","planes","historial","equipo","ajustes","scouting","ayuda","fantasy"];
+const VIEWS=["resumen","asistencia","anadir","planes","historial","equipo","ajustes","scouting","ayuda","fantasy","ficha","pizarra"];
 function route(){
   document.querySelector("nav.tabs").hidden = !teamOpen; $(".pot").hidden = !teamOpen;
   if(!teamOpen){ document.querySelectorAll(".view").forEach(el=>{ el.hidden = el.id !== "v-inicio"; }); window.scrollTo(0,0); return; }
@@ -119,13 +119,17 @@ function route(){
   document.querySelectorAll(".view").forEach(el=>{ el.hidden = el.id !== "v-"+v; });
   document.querySelectorAll("nav.tabs a").forEach(a=>{ a.dataset.v===v ? a.setAttribute("aria-current","page") : a.removeAttribute("aria-current"); });
   if(v==="historial"){ renderHist(); markSeenSoon(); }
+  if(v==="ficha") renderFicha();
+  if(v==="pizarra"){ pzInit(); renderPizarra(); }
+  if(v==="scouting") cargarFBCV();
+  if(lang!=="es") setTimeout(()=>traducir(),50);
   window.scrollTo(0,0);
 }
 let seenT;
 function markSeenSoon(){ clearTimeout(seenT); seenT=setTimeout(()=>{ S.lastSeen=Date.now(); store.set("multas.lastSeen."+TEAM,S.lastSeen); renderBadge(); },2500); }
 
 /* ---------- pintar ---------- */
-function renderAll(){ renderFantasy(); renderHeader(); renderResumen(); renderBote(); renderPagos(); renderLog(); renderCumple(); renderAsis(); renderAdd(); renderHist(); renderEquipo(); renderAjustes(); renderPlanes(); renderScouting(); renderBadge(); }
+function renderAll(){ renderFantasy(); renderHeader(); renderResumen(); renderBote(); renderPagos(); renderLog(); renderCumple(); renderFicha(); renderPizarra(); renderAsis(); renderAdd(); renderHist(); renderEquipo(); renderAjustes(); renderPlanes(); renderScouting(); renderBadge(); }
 
 function renderHeader(){
   const name = teamOpen ? (S.aj.nombre||"Tu equipo") : "Del equipo";
@@ -173,7 +177,7 @@ function renderResumen(){
         <span class="amt"><b>${eur(r.t)}</b>${r.t>0?(r.pend>0?`<span>debe ${eur(r.pend)}</span>`:`<span class="paid">pagado</span>`):""}</span>
       </button>
       ${open?`<div class="rbody">${items.length?items.map(m=>`<div class="row" style="justify-content:space-between"><span class="note">${esc(dayName(m.fecha))} · ${esc(m.tipoNombre)}${esc(qtyTxt(m))}</span><span><span class="pill ${m.pagada?"paid":"pend"}">${m.pagada?"cobrada":"pendiente"}</span> <b>${eur(m.importe)}</b></span></div>`).join(""):'<span class="note">Sin multas en este periodo.</span>'}
-        ${r.pend>0&&S.canWrite?`<div class="row end"><button type="button" class="btn ok small" data-payall="${esc(r.p.id)}">Cobrar todo (${eur(r.pend)})</button></div>`:""}</div>`:""}
+        <div class="row end"><button type="button" class="btn small ghost" data-ficha="${esc(r.p.id)}">👤 Ver ficha</button>${r.pend>0&&S.canWrite?`<button type="button" class="btn ok small" data-payall="${esc(r.p.id)}">Cobrar todo (${eur(r.pend)})</button>`:""}</div></div>`:""}
     </li>`;
   }).join("");
 }
@@ -259,7 +263,7 @@ function asStats(){
 }
 function renderAsis(){
   if(!$("#v-asistencia")) return;
-  renderDias(); renderRankMes();
+  renderDias(); renderRankMes(); renderCal();
   const er=$("#evRivalWrap"); if(er) er.hidden=$("#evTipo").value!=="partido";
   $("#evForm").hidden=!S.canWrite;
   if(!$("#evFecha").value) $("#evFecha").value=today();
@@ -315,6 +319,7 @@ function evCard(ev, upcoming){
     ${S.canWrite&&upcoming&&ev.tipo==="partido"?`<button type="button" class="btn small ghost" data-conv="${esc(ev.id)}">📋 Convocar</button>`:""}
     ${S.canWrite&&upcoming?`<button type="button" class="btn small ghost" data-evping="${esc(ev.id)}" ${ev.avisar?"disabled":""}>${ev.avisar?"Aviso en camino…":"Avisar a todos ahora"}</button>`:""}
     ${S.canWrite?`<span style="flex:1"></span><button type="button" class="btn small danger" data-evdel="${esc(ev.id)}">Borrar</button>`:""}</div>`;
+  if(!upcoming) html+=notaPartidoHtml(ev);
   if(open){
     html+='<div class="roll">';
     if(S.canWrite) html+=`<div class="row"><button type="button" class="btn small ok" data-allin="${esc(ev.id)}">Marcar el resto como «vino»</button></div>`;
@@ -399,7 +404,7 @@ function renderEquipo(){
   const act=activePlayers(), ina=S.jug.filter(p=>p.activo===false).sort(sortPlayers);
   const row=(p,active)=>`<div class="prow">
       <span class="av ${p.rol==="entrenador"?"coach":""} ${hasDor(p)?"num":""}">${esc(avTxt(p))}</span>
-      <span class="who" data-namebox="${esc(p.id)}"><b>${esc(p.nombre)}</b><span>${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"} · ${cnt(p.id)} apuntes${S.canWrite?(p.email?" · "+esc(p.email):" · sin cuenta"):(p.email?" · con cuenta":"")}</span></span>
+      <span class="who" data-namebox="${esc(p.id)}"><b><a href="#ficha" data-ficha="${esc(p.id)}" style="color:inherit">${esc(p.nombre)}</a></b><span>${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"} · ${cnt(p.id)} apuntes${S.canWrite?(p.email?" · "+esc(p.email):" · sin cuenta"):(p.email?" · con cuenta":"")}</span></span>
       ${S.canWrite?`<span class="row">
         <button type="button" class="btn small ghost" data-rename="${esc(p.id)}">✏️ Nombre y dorsal</button>
         <button type="button" class="btn small ghost" data-mail="${esc(p.id)}">Correo</button>
@@ -549,7 +554,7 @@ async function syncTokenPrefs(){
 
 /* ---------- eventos ---------- */
 document.addEventListener("click", e=>{
-  const t=e.target.closest("button"); if(!t) return;
+  const t=e.target.closest("button,[data-ficha]"); if(!t) return; if(t.tagName==="A") e.preventDefault();
   const d=t.dataset;
   if(t.id==="hideInstall"){ store.set("multas.hideInstall",true); renderInstall(); return; }
   if(t.id==="doInstall"&&installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; renderInstall(); }); return; }
@@ -567,6 +572,7 @@ document.addEventListener("click", e=>{
       run(()=>F.updateDoc(dref("jugadores",d.mailsave),{email:v}), v?"Correo guardado":"Cuenta quitada"); return; }
   if(d.ay){ showAyuda(d.ay); return; }
   if(handleTanda1(t,d)) return;
+  if(handleTanda2(t,d)) return;
   if(handleFanClick(t,d)) return;
   if(handlePlanClick(t,d)) return;
   if(handleScoutClick(t,d)) return;
@@ -1027,8 +1033,8 @@ function renderScouting(){
   const gen=notasDe("");
   let h=`<div class="card resumen-sc"><div class="who-line"><h3>📋 Resumen · ${esc(r.nombre)}</h3><span class="mini">${S.rivNotas.length} notas</span></div>
     ${gen.length?`<div class="sc-gen">🏀 ${gen.map(n=>esc(n.texto)).join(" · ")}</div>`:""}
-    ${conNotas.length?`<div class="tblwrap"><table class="sc-tbl"><thead><tr><th>Nº</th><th>Jugador</th><th>Pos</th><th>Scouting</th></tr></thead><tbody>`+
-      conNotas.map(j=>`<tr><td><span class="dor sm">${esc(j.dorsal??"–")}</span></td><td><b>${esc(shortName(j.nombre))}</b></td><td>${esc(posCorta(j.pos))}</td><td>${notasDe(j.id).map(n=>esc(n.texto)).join(" · ")}</td></tr>`).join("")+
+    ${conNotas.length?`<div class="tblwrap"><table class="sc-tbl"><thead><tr><th>Nº</th><th>Jugador</th><th>Pos</th><th>Pts</th><th>Scouting</th></tr></thead><tbody>`+
+      conNotas.map(j=>`<tr><td><span class="dor sm">${esc(j.dorsal??"–")}</span></td><td><b>${esc(shortName(j.nombre))}</b></td><td>${esc(posCorta(j.pos))}</td><td>${statsRival(r.id,j.nombre)?.pts??"–"}</td><td>${notasDe(j.id).map(n=>esc(n.texto)).join(" · ")}</td></tr>`).join("")+
       `</tbody></table></div>`:'<p class="note">Todavía no hay notas de jugadores. Añadidlas abajo, en cada jugador.</p>'}
     ${sinNotas.length?`<p class="mini">Sin notas: ${sinNotas.map(j=>(j.dorsal!=null&&j.dorsal!==""?"#"+esc(j.dorsal)+" ":"")+esc(shortName(j.nombre))).join(", ")}</p>`:""}
   </div>`;
@@ -1043,7 +1049,7 @@ function renderScouting(){
     box.innerHTML=h; return;
   }
   if(S.canWrite) h+=`<div class="card"><div class="inl"><input type="number" id="rj-dorsal" min="0" max="99" placeholder="Nº" aria-label="Dorsal"><input type="text" id="rj-nombre" maxlength="50" placeholder="Nombre del jugador"><input type="text" id="rj-pos" maxlength="20" placeholder="Posición (opcional)" style="flex:0 1 140px"><button type="button" class="btn small" id="rjAdd">Añadir jugador</button></div></div>`;
-  h+=plantilla.map(j=>`<div class="rj"><div class="who-line"><span class="row" style="gap:8px;flex-wrap:nowrap"><span class="dor">${esc(j.dorsal??"–")}</span><span><b>${esc(j.nombre)}</b>${j.pos?`<br><span class="mini">${esc(j.pos)}</span>`:""}</span></span>${S.canWrite?`<span class="row"><button type="button" class="btn small ghost" data-rjedit="${esc(j.id)}" aria-label="Editar">✏️</button><button type="button" class="btn small ghost" data-rjdel="${esc(j.id)}">Quitar</button></span>`:""}</div>
+  h+=plantilla.map(j=>`<div class="rj"><div class="who-line"><span class="row" style="gap:8px;flex-wrap:nowrap"><span class="dor">${esc(j.dorsal??"–")}</span><span><b>${esc(j.nombre)}</b>${j.pos?`<br><span class="mini">${esc(j.pos)}</span>`:""}${statsRival(r.id,j.nombre)?"<br>"+statTxt(statsRival(r.id,j.nombre)):""}</span></span>${S.canWrite?`<span class="row"><button type="button" class="btn small ghost" data-rjedit="${esc(j.id)}" aria-label="Editar">✏️</button><button type="button" class="btn small ghost" data-rjdel="${esc(j.id)}">Quitar</button></span>`:""}</div>
     ${S.rjEdit===j.id?`<div class="inl"><input type="number" class="dorin" id="re-d" min="0" max="99" value="${j.dorsal??""}" placeholder="Nº" aria-label="Dorsal"><input type="text" id="re-n" maxlength="50" value="${esc(j.nombre)}" aria-label="Nombre"><input type="text" id="re-p" maxlength="20" value="${esc(j.pos||"")}" placeholder="Posición" aria-label="Posición" style="flex:0 1 120px"><button type="button" class="btn small" data-rjsave="${esc(j.id)}">Guardar</button></div>`:""}
     ${notasDe(j.id).map(notaHtml).join("")}${addNota(j.id)}</div>`).join("") || '<p class="note">Todavía no hay jugadores en la plantilla.</p>';
   box.innerHTML=h;
@@ -1221,6 +1227,7 @@ async function importFantasy(){
     Object.entries(data.clasificacion||{}).forEach(([n,x])=>{ const p=buscar(n); p?clas[p.id]={nombre:p.nombre,total:+x.total||0,jornadas:+x.jornadas||0,ultima:x.ultima??null}:falta.push(n); });
     if(!Object.keys(precios).length && !Object.keys(clas).length){ toast("No hay datos para importar todavía"); return; }
     const extra = data.ultima ? {ultima:data.ultima} : {};
+    extra.precioHist = Object.fromEntries(Object.entries(precios).map(([pid,v])=>[pid,[{f:"importado",p:v}]]));
     await run(()=>F.setDoc(F.doc(db,"equipos",TEAM,"fantasy","estado"),{precios,clasificacion:clas,...extra,importado:Date.now()},{merge:true}),
       `Liga importada: ${Object.keys(precios).length} valores y ${Object.keys(clas).length} en la clasificación`+(falta.length?`. Sin encontrar: ${[...new Set(falta)].join(", ")}`:""));
   }catch(e){ console.error(e); toast("No se pudo importar: "+errMsg(e)); }
@@ -1298,7 +1305,8 @@ function clasificacion(){
   if(!c.length) h+=`<p class="note">Aún no se ha jugado ninguna jornada.</p>`;
   else h+=`<ol class="clas">${c.map((x,i)=>`<li class="${x.em===yo?"yo":""}"><span class="pos">${i+1}</span><span>${esc(x.nombre||x.em)}${x.em===yo?' <span class="pill newp">tú</span>':""}<br><span class="mini">${x.jornadas||0} jornadas${x.ultima!=null?" · última: "+x.ultima+" pts":""}</span></span><span class="pts">${Math.round((x.total||0)*10)/10}</span></li>`).join("")}</ol>`;
   if(ult) h+=`<p class="note" style="margin-top:8px">Última jornada (${esc(ult.rival||"")}): MVP <b>${esc(ult.mvpNombre||"–")}</b>${ult.ganador?` · ganó <b>${esc(ult.ganador)}</b> con ${ult.ganadorPts} pts`:""}.</p>`;
-  return h+"</div>";
+  if(c.length) h+=`<div class="row" style="margin-top:8px"><button type="button" class="btn small ghost" id="fanTarjeta">📤 Compartir clasificación</button><button type="button" class="btn small ghost" id="fanMercado">${S.verMercado?"Ocultar mercado":"📈 Ver mercado"}</button></div>`;
+  return h+"</div>"+(S.verMercado?mercado():"")+historialFantasy();
 }
 function handleFanClick(t,d){
   if(d.fanpick){ const s=S.fanSel; const i=s.jugadores.indexOf(d.fanpick); if(i>=0){ s.jugadores.splice(i,1); if(s.capitan===d.fanpick) s.capitan=null; } else if(s.jugadores.length<5) s.jugadores.push(d.fanpick); renderFantasy(); return true; }
@@ -1329,6 +1337,7 @@ const multaTxt = m => `${m.jugadorNombre||playerById(m.jugador)?.nombre||"?"} ·
 
 // Letra grande (preferencia de cada móvil)
 function aplicarLetra(){ const on=!!store.get("multas.letraGrande",false); document.documentElement.classList.toggle("grande",on); const c=$("#letraGrande"); if(c) c.checked=on; }
+document.addEventListener("change",e=>{ if(e.target.id==="fotoIn" && e.target.files?.[0]) subirFoto(e.target.files[0]); });
 $("#letraGrande").addEventListener("change",e=>{ store.set("multas.letraGrande",e.target.checked); aplicarLetra(); });
 aplicarLetra();
 
@@ -1467,6 +1476,196 @@ function handleTanda1(t,d){
   return false;
 }
 
+
+/* ---------- tanda 2 ---------- */
+const keyN = n => String(n||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/[.\s]+/g," ").trim();
+function mismaPersona(corto, largo){ const a=keyN(corto), b=keyN(largo); if(!a||!b) return false; if(a===b) return true; const at=a.split(" "), bt=b.split(" ");
+  if(a.replace(/ /g,"")===b.replace(/ /g,"").slice(0,a.replace(/ /g,"").length) && a.length<=4) return true; // iniciales (S T ↔ S T M)
+  return at.length>=2 && at.every((t,i)=>bt[i]===t); }
+// Estadísticas y liga de la FBCV (archivo público junto a la app)
+let FBCV=null;
+async function cargarFBCV(){ if(FBCV) return FBCV; try{ FBCV=await (await fetch("fbcv-stats.json",{cache:"no-cache"})).json(); }catch{ FBCV={}; } renderLiga(); renderScouting(); return FBCV; }
+const statsRival = (rid, nombre) => { const fid=String(rid||"").replace("fbcv-",""); return (FBCV?.rivales?.[fid]||[]).find(x=>mismaPersona(nombre,x.n)); };
+const statsPropias = nombre => (FBCV?.propios||[]).find(x=>mismaPersona(nombre,x.n));
+const statTxt = s => s ? `<span class="stat-mini">📊 <b>${s.pts}</b> pts/p · ${s.min} min · ${s.t3} triples · TL ${esc(s.tl)} · ${s.pj} PJ</span>` : "";
+function renderLiga(){
+  const box=$("#ligaBox"); if(!box||!FBCV?.clasificacion) return;
+  const nos=FBCV.clasificacion.find(x=>/ONTINYENT/i.test(x.equipo));
+  $("#ligaPos").textContent = nos ? `Vamos ${nos.pos}.º · ${nos.v}-${nos.p}` : "";
+  box.innerHTML=`<div class="tblwrap"><table class="liga"><thead><tr><th>#</th><th>Equipo</th><th>J</th><th>G</th><th>P</th><th>+/-</th><th>Pts</th></tr></thead><tbody>${FBCV.clasificacion.map(x=>`<tr class="${/ONTINYENT/i.test(x.equipo)?"nos":""}"><td>${x.pos}</td><td>${esc(x.equipo)}</td><td>${x.j}</td><td>${x.v}</td><td>${x.p}</td><td>${x.pf-x.pc>0?"+":""}${x.pf-x.pc}</td><td>${x.pts}</td></tr>`).join("")}</tbody></table></div>
+    <h4 style="margin:12px 0 4px">Nuestros resultados</h4>${(FBCV.resultados||[]).slice().reverse().map(r=>{ const w=r.nos>r.ellos; return `<div class="res"><span>${esc(dayName(r.fecha))} · ${r.casa?"🏠":"✈️"} ${esc(r.rival)}</span><b class="${w?"w":"l"}">${w?"G":"P"} ${r.nos}-${r.ellos}</b></div>`; }).join("")}
+    <p class="mini">Datos de la FBCV copiados el ${esc(FBCV.copiado||"")}. Se actualizan cuando lo pidas.</p>`;
+}
+// Calendario mensual
+let calMes=null, calDia=null;
+function renderCal(){
+  const box=$("#calBox"); if(!box||box.hidden) return;
+  const hoy=new Date(); if(!calMes) calMes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  const y=calMes.getFullYear(), m=calMes.getMonth(); const primero=(new Date(y,m,1).getDay()+6)%7; const dias=new Date(y,m+1,0).getDate();
+  const evs=S.eventos.filter(e=>(e.fecha||"").startsWith(y+"-"+pad(m+1)));
+  let h=`<div class="who-line"><button type="button" class="btn small ghost" data-calnav="-1" aria-label="Mes anterior">‹</button><h3>${MESES[m]} ${y}</h3><button type="button" class="btn small ghost" data-calnav="1" aria-label="Mes siguiente">›</button></div><div class="cal">`;
+  h+=["L","M","X","J","V","S","D"].map(d=>`<span class="dow">${d}</span>`).join("");
+  for(let i=0;i<primero;i++) h+="<span></span>";
+  for(let d=1;d<=dias;d++){ const f=y+"-"+pad(m+1)+"-"+pad(d); const de=evs.filter(e=>e.fecha===f);
+    h+=`<button type="button" data-caldia="${f}" class="${f===today()?"hoy":""}" aria-pressed="${calDia===f}"><span>${d}</span><span class="dots">${de.map(e=>`<i class="${e.tipo==="partido"?"p":""}"></i>`).join("")}</span></button>`; }
+  h+="</div>";
+  if(calDia){ const de=S.eventos.filter(e=>e.fecha===calDia); h+= de.length ? `<ul class="list" style="margin-top:10px">${de.map(ev=>evCard(ev, evInicioMs(ev)+2*3600e3>Date.now())).join("")}</ul>` : `<p class="note" style="margin-top:8px">Nada el ${esc(dayName(calDia))}.</p>`; }
+  box.innerHTML=h;
+}
+const evInicioMs = ev => new Date(ev.fecha+"T"+(ev.hora||"12:00")).getTime();
+// Ficha de jugador
+let fichaId=null;
+function abrirFicha(pid){ fichaId=pid; location.hash="ficha"; renderFicha(); }
+function renderFicha(){
+  const box=$("#fichaBox"); if(!box) return;
+  if(!fichaId){ box.innerHTML='<p class="note">Elige un jugador en la clasificación o en la plantilla para ver su ficha.</p>'; return; }
+  const p=playerById(fichaId); if(!p){ box.innerHTML='<p class="note">No se encuentra el jugador.</p>'; return; }
+  const ms=S.multas.filter(m=>m.jugador===p.id); const T=totals(ms.filter(inPeriod));
+  let vino=0,tot=0; S.eventos.forEach(e=>{ const a=(e.asistencia||{})[p.id]; if(a){ tot++; if(attended(a)) vino++; } });
+  const st=statsPropias(p.nombre); const fan=S.fan?.clasificacion?.[p.id]; const precioF=(S.fan?.precios||{})[p.id];
+  const puedoFoto = S.canWrite || myPlayer()?.id===p.id;
+  box.innerHTML=`<div class="card"><div class="ficha-h">${p.foto?`<img class="ficha-foto" src="${esc(p.foto)}" alt="">`:`<span class="ficha-foto">${esc(avTxt(p))}</span>`}
+      <div><h2 style="margin:0">${esc(p.nombre)}</h2><span class="note">${p.rol==="entrenador"?"Entrenador/a":"Jugador/a"}${hasDor(p)?" · #"+esc(p.dorsal):""}${p.cumple?" · 🎂 "+esc(new Date(p.cumple+"T12:00").toLocaleDateString("es-ES",{day:"numeric",month:"long"})):""}</span></div></div>
+    ${puedoFoto?`<label class="f">Foto (opcional)<input type="file" id="fotoIn" accept="image/*"></label>`:""}</div>
+  <div class="card"><h3>Esta temporada</h3><div class="kv">
+    <div><small>Multas</small><b>${eur(T.t)}</b></div><div><small>Debe</small><b>${eur(T.p)}</b></div>
+    <div><small>Asistencia</small><b>${tot?Math.round(vino/tot*100)+"%":"–"}</b><span class="mini"> ${vino}/${tot}</span></div>
+    ${st?`<div><small>Puntos/partido</small><b>${st.pts}</b></div><div><small>Minutos</small><b>${st.min}</b></div><div><small>Triples</small><b>${st.t3}</b></div><div><small>Tiros libres</small><b>${esc(st.tl)}</b></div><div><small>Partidos</small><b>${st.pj}</b></div>`:""}
+    ${fanCfg().activo&&p.rol!=="entrenador"?`<div><small>Fantasy</small><b>${precioF!=null?fmtM(precioF):"10 M"}</b></div>${fan?`<div><small>Pts fantasy</small><b>${fan.total}</b></div>`:""}`:""}
+  </div>${st?`<p class="mini">Estadísticas de la FBCV (copiadas el ${esc(FBCV?.copiado||"")}).</p>`:""}</div>`;
+}
+async function subirFoto(file){
+  try{
+    const img=await createImageBitmap(file); const k=Math.min(1,200/Math.max(img.width,img.height));
+    const c=document.createElement("canvas"); c.width=Math.round(img.width*k); c.height=Math.round(img.height*k); c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    const url=c.toDataURL("image/jpeg",0.8);
+    await run(()=>F.updateDoc(dref("jugadores",fichaId),{foto:url}),"Foto guardada");
+  }catch(e){ console.error(e); toast("No se pudo leer esa imagen."); }
+}
+// Fantasy: historial por jornadas y mercado de precios
+function historialFantasy(){
+  const js=(S.fanJornadas||[]).filter(j=>j.cerrada).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+  if(!js.length) return "";
+  const porEmail=Object.fromEntries(S.jug.filter(p=>p.email).map(p=>[pkey(p),p]));
+  const gente=[...new Set(js.flatMap(j=>Object.keys(j.resultados||{})))];
+  const filas=gente.map(em=>({p:porEmail[em], em, v:js.map(j=>(j.resultados||{})[em])})).sort((a,b)=>b.v.reduce((s,x)=>s+(x||0),0)-a.v.reduce((s,x)=>s+(x||0),0));
+  return `<div class="card"><h3>📅 Por jornadas</h3><div class="hist"><table><thead><tr><th>Participante</th>${js.map(j=>`<th>${esc(new Date(j.fecha+"T12:00").toLocaleDateString("es-ES",{day:"numeric",month:"short"}))}</th>`).join("")}</tr></thead><tbody>${filas.map(f=>`<tr><td>${esc(shortName(f.p?.nombre||f.em))}</td>${f.v.map(x=>`<td>${x==null?"–":x}</td>`).join("")}</tr>`).join("")}</tbody></table></div><p class="mini">Desde que el fantasy se juega en la app.</p></div>`;
+}
+function sparkline(pts){
+  if(!pts||pts.length<2) return "";
+  const W=90,H=26,min=Math.min(...pts),max=Math.max(...pts),r=max-min||1;
+  const xy=pts.map((v,i)=>[2+i*(W-4)/(pts.length-1), H-3-(v-min)/r*(H-6)]);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${xy.map(p=>p.join(",")).join(" ")}"/><circle cx="${xy.at(-1)[0]}" cy="${xy.at(-1)[1]}" r="3"/></svg>`;
+}
+function mercado(){
+  const hist=S.fan?.precioHist||{};
+  const filas=fanJugadores().map(p=>{ const h=(hist[p.id]||[]).map(x=>+x.p); const now=precio(p.id); const prev=h.length>1?h.at(-2):null; return {p,now,prev,h}; }).sort((a,b)=>b.now-a.now);
+  return `<div class="card"><h3>📈 Mercado</h3>${filas.map(f=>{ const d=f.prev==null?0:Math.round((f.now-f.prev)*10)/10; return `<div class="merc"><span><b>${esc(shortName(f.p.nombre))}</b></span>${sparkline(f.h)}<span>${fmtM(f.now)} ${d?`<span class="${d>0?"up":"down"}">${d>0?"▲":"▼"} ${Math.abs(d).toLocaleString("es-ES")}</span>`:""}</span></div>`; }).join("")}<p class="mini">Precio después de cada jornada.</p></div>`;
+}
+// Tarjeta para compartir (imagen)
+async function tarjetaFantasy(){
+  const c=document.createElement("canvas"); c.width=1080; c.height=1350; const g=c.getContext("2d");
+  g.fillStyle="#29297a"; g.fillRect(0,0,1080,1350); g.fillStyle="#f03c02"; g.fillRect(0,0,1080,18); g.fillRect(0,1332,1080,18);
+  g.fillStyle="#fff"; g.font="800 92px 'Barlow Condensed', 'Arial Narrow', sans-serif"; g.fillText("FANTASY", 80, 170);
+  g.font="600 44px Inter, sans-serif"; g.fillStyle="#d7d7f5"; g.fillText((S.aj.nombre||"").toUpperCase(), 80, 235);
+  const ult=S.fan?.ultima||{}; let y=340;
+  if(ult.mvpNombre){ g.fillStyle="#f03c02"; g.font="700 40px Inter, sans-serif"; g.fillText("MVP · "+(ult.rival||""), 80, y); y+=80; g.fillStyle="#fff"; g.font="800 84px 'Barlow Condensed', sans-serif"; g.fillText("🏆 "+ult.mvpNombre, 80, y); y+=110; }
+  g.fillStyle="#f03c02"; g.font="700 40px Inter, sans-serif"; g.fillText("CLASIFICACIÓN", 80, y); y+=30;
+  const cl=Object.values(S.fan?.clasificacion||{}).sort((a,b)=>(b.total||0)-(a.total||0)).slice(0,8);
+  cl.forEach((x,i)=>{ y+=88; g.fillStyle=i<3?"#fff":"#d7d7f5"; g.font=`${i<3?800:600} 54px Inter, sans-serif`; g.fillText(`${["🥇","🥈","🥉"][i]||(i+1)+"."}  ${shortName(x.nombre)}`, 80, y); g.textAlign="right"; g.fillText(String(Math.round((x.total||0)*10)/10), 1000, y); g.textAlign="left"; });
+  const blob=await new Promise(r=>c.toBlob(r,"image/png"));
+  const file=new File([blob],"fantasy.png",{type:"image/png"});
+  if(navigator.canShare && navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file], title:"Fantasy · "+(S.aj.nombre||"")}); return; }catch{} }
+  descargar("fantasy.png", blob, "image/png");
+}
+// Notas después del partido (para la vuelta)
+function notaPartidoHtml(ev){
+  if(ev.tipo!=="partido"||!ev.rival||!email()) return "";
+  return `<div class="inl"><input type="text" id="np-${esc(ev.id)}" maxlength="300" placeholder="¿Qué funcionó y qué no? (para la vuelta)"><button type="button" class="btn small ghost" data-notapartido="${esc(ev.id)}">📝 Guardar</button></div>`;
+}
+// Pizarra de jugadas
+const PZ={modo:"mover", fichas:null, trazos:[], arrastra:null, trazo:null};
+function pzInit(){ if(!PZ.fichas) PZ.fichas=[...[0.5,0.15,0.85,0.25,0.75].map((x,i)=>({t:"a",n:i+1,x,y:[0.55,0.25,0.25,0.75,0.75][i]})), ...[0.5,0.3,0.7,0.35,0.65].map((x,i)=>({t:"d",n:i+1,x,y:[0.42,0.3,0.3,0.62,0.62][i]}))]; pzDraw(); }
+function pzDraw(){
+  const c=$("#pzCanvas"); if(!c) return; const g=c.getContext("2d"); const W=c.width,H=c.height;
+  const css=getComputedStyle(document.documentElement); const lin=css.getPropertyValue("--muted").trim()||"#888";
+  g.clearRect(0,0,W,H); g.fillStyle=css.getPropertyValue("--orange-soft").trim()||"#fde7de"; g.fillRect(0,0,W,H);
+  g.strokeStyle=lin; g.lineWidth=2;
+  g.strokeRect(4,4,W-8,H-8);                         // líneas exteriores
+  g.strokeRect(W/2-96,4,192,232);                    // zona
+  g.beginPath(); g.arc(W/2,236,72,0,Math.PI); g.stroke();   // tiros libres
+  g.beginPath(); g.moveTo(40,4); g.lineTo(40,120); g.arc(W/2,52,262,Math.PI-0.34,0.34,true); g.lineTo(W-40,4); g.stroke(); // triple
+  g.beginPath(); g.arc(W/2,52,14,0,2*Math.PI); g.stroke(); g.beginPath(); g.moveTo(W/2-36,36); g.lineTo(W/2+36,36); g.stroke(); // aro y tablero
+  g.beginPath(); g.arc(W/2,H-4,72,Math.PI,0); g.stroke();   // medio campo
+  const flecha=(pts)=>{ if(pts.length<4) return; g.beginPath(); g.moveTo(pts[0]*W,pts[1]*H); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i]*W,pts[i+1]*H); g.stroke();
+    const n=pts.length; const x2=pts[n-2]*W,y2=pts[n-1]*H,x1=pts[Math.max(0,n-6)]*W,y1=pts[Math.max(1,n-5)]*H; const a=Math.atan2(y2-y1,x2-x1);
+    g.beginPath(); g.moveTo(x2,y2); g.lineTo(x2-14*Math.cos(a-0.4),y2-14*Math.sin(a-0.4)); g.lineTo(x2-14*Math.cos(a+0.4),y2-14*Math.sin(a+0.4)); g.closePath(); g.fill(); };
+  g.strokeStyle=g.fillStyle=css.getPropertyValue("--ink").trim()||"#17173d"; g.lineWidth=4; g.lineCap="round"; g.lineJoin="round";
+  PZ.trazos.forEach(flecha); if(PZ.trazo) flecha(PZ.trazo);
+  PZ.fichas.forEach(f=>{ const x=f.x*W,y=f.y*H; g.lineWidth=3;
+    if(f.t==="a"){ g.fillStyle="#f03c02"; g.beginPath(); g.arc(x,y,22,0,2*Math.PI); g.fill(); g.fillStyle="#fff"; g.font="800 24px Inter, sans-serif"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(f.n,x,y+1); }
+    else { g.strokeStyle="#29297a"; g.lineWidth=5; g.beginPath(); g.moveTo(x-15,y-15); g.lineTo(x+15,y+15); g.moveTo(x+15,y-15); g.lineTo(x-15,y+15); g.stroke(); } });
+}
+function pzPos(e){ const c=$("#pzCanvas"), r=c.getBoundingClientRect(); return {x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)), y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}; }
+(function(){ const c=$("#pzCanvas"); if(!c) return;
+  c.addEventListener("pointerdown",e=>{ c.setPointerCapture(e.pointerId); const p=pzPos(e);
+    if(PZ.modo==="mover"){ PZ.arrastra=PZ.fichas.slice().reverse().find(f=>Math.hypot((f.x-p.x)*c.width,(f.y-p.y)*c.height)<30)||null; }
+    else PZ.trazo=[p.x,p.y]; });
+  c.addEventListener("pointermove",e=>{ const p=pzPos(e); if(PZ.arrastra){ PZ.arrastra.x=p.x; PZ.arrastra.y=p.y; pzDraw(); } else if(PZ.trazo){ const n=PZ.trazo.length; if(Math.hypot((PZ.trazo[n-2]-p.x)*c.width,(PZ.trazo[n-1]-p.y)*c.height)>8){ PZ.trazo.push(+p.x.toFixed(3),+p.y.toFixed(3)); pzDraw(); } } });
+  const fin=()=>{ if(PZ.trazo && PZ.trazo.length>=4) PZ.trazos.push(PZ.trazo); PZ.trazo=null; PZ.arrastra=null; pzDraw(); };
+  c.addEventListener("pointerup",fin); c.addEventListener("pointercancel",fin);
+})();
+function renderPizarra(){
+  if(!$("#pzLista")) return;
+  $("#pzGuardarRow").hidden=!S.canWrite;
+  const l=[...(S.jugadas||[])].sort((a,b)=>(b.creado||0)-(a.creado||0));
+  $("#pzLista").innerHTML = l.length ? l.map(j=>`<li class="gasto"><span><b>${esc(j.nombre)}</b> <span class="mini">· ${esc(shortName(j.autor))}</span></span><span class="row"><button type="button" class="btn small" data-pzabrir="${esc(j.id)}">Abrir</button>${S.canWrite?`<button type="button" class="btn small danger" data-pzdel="${esc(j.id)}">✕</button>`:""}</span></li>`).join("") : '<li class="note">Todavía no hay jugadas guardadas.</li>';
+}
+// Idiomas: traducción de los textos fijos de la app (menús, títulos y botones)
+const I18N={
+ va:{"Resumen":"Resum","Historial":"Historial","Asistencia":"Assistència","Multa":"Multa","Scouting":"Scouting","Planes":"Plans","Ajustes":"Ajustos","Equipo":"Equip","Clasificación de multas":"Classificació de multes","Bote total":"Pot total","Por cobrar":"Per cobrar","Cobrado":"Cobrat","Poner multa":"Posar multa","Próximos":"Pròxims","Anteriores":"Anteriors","Voy":"Vaig","No voy":"No vaig","Guardar":"Guardar","Borrar":"Esborrar","Quitar":"Llevar","Cancelar":"Cancel·lar","Pasar lista":"Passar llista","Avisar a todos ahora":"Avisar a tots ara","Crear":"Crear","Tus multas":"Les teues multes","Ver mis multas":"Veure les meues multes","Copiar resumen para WhatsApp":"Copiar resum per a WhatsApp","Manual de uso":"Manual d'ús","Cuenta":"Compte","Administradores":"Administradors","Tipos de multa":"Tipus de multa","Avisos":"Avisos","Activar notificaciones":"Activar notificacions","Plantilla":"Plantilla","Añadir":"Afegir","Entrar":"Entrar","Salir":"Eixir","Crear cuenta":"Crear compte","Días que no puedo ir":"Dies que no puc anar","Guardar mis días":"Guardar els meus dies","Nuevo entreno o partido":"Nou entrenament o partit","Entreno":"Entrenament","Partido":"Partit","Cobrada":"Cobrada","Pendiente":"Pendent","Pantalla":"Pantalla","Letra más grande":"Lletra més gran","Idioma":"Idioma","Sugerir una mejora":"Suggerir una millora","Enviar sugerencia":"Enviar suggeriment","Fantasy":"Fantasy","Reglas":"Regles","Clasificación":"Classificació","Mercado":"Mercat","Pizarra":"Pissarra","Liga · clasificación y resultados":"Lliga · classificació i resultats","Nuestros resultados":"Els nostres resultats","Pagos":"Pagaments","Cobrar":"Cobrar","Descargar en Excel":"Descarregar en Excel","Registro de cambios":"Registre de canvis","El bote":"El pot","Convocar":"Convocar","Cómo llegar":"Com arribar","Lista":"Llista","Calendario":"Calendari","Esta temporada":"Esta temporada","Volver":"Tornar","Privacidad y datos":"Privacitat i dades"},
+ en:{"Resumen":"Summary","Historial":"History","Asistencia":"Attendance","Multa":"Fine","Scouting":"Scouting","Planes":"Plans","Ajustes":"Settings","Equipo":"Team","Clasificación de multas":"Fines ranking","Bote total":"Total pot","Por cobrar":"To collect","Cobrado":"Collected","Poner multa":"Add fine","Próximos":"Upcoming","Anteriores":"Past","Voy":"I'm in","No voy":"Can't go","Guardar":"Save","Borrar":"Delete","Quitar":"Remove","Cancelar":"Cancel","Pasar lista":"Take attendance","Avisar a todos ahora":"Notify everyone now","Crear":"Create","Tus multas":"Your fines","Ver mis multas":"See my fines","Copiar resumen para WhatsApp":"Copy summary for WhatsApp","Manual de uso":"User guide","Cuenta":"Account","Administradores":"Admins","Tipos de multa":"Fine types","Avisos":"Notices","Activar notificaciones":"Turn on notifications","Plantilla":"Roster","Añadir":"Add","Entrar":"Sign in","Salir":"Sign out","Crear cuenta":"Create account","Días que no puedo ir":"Days I can't make it","Guardar mis días":"Save my days","Nuevo entreno o partido":"New practice or game","Entreno":"Practice","Partido":"Game","Cobrada":"Paid","Pendiente":"Pending","Pantalla":"Display","Letra más grande":"Larger text","Idioma":"Language","Sugerir una mejora":"Suggest an improvement","Enviar sugerencia":"Send suggestion","Fantasy":"Fantasy","Reglas":"Rules","Clasificación":"Standings","Mercado":"Market","Pizarra":"Playbook","Liga · clasificación y resultados":"League · standings and results","Nuestros resultados":"Our results","Pagos":"Payments","Cobrar":"Collect","Descargar en Excel":"Download for Excel","Registro de cambios":"Change log","El bote":"The pot","Convocar":"Call up","Cómo llegar":"Directions","Lista":"List","Calendario":"Calendar","Esta temporada":"This season","Volver":"Back","Privacidad y datos":"Privacy and data"}
+};
+let lang=store.get("multas.idioma","es"), traduciendo=false;
+const ORIG=new WeakMap();
+function traducir(root=document.body){
+  if(lang==="es" && !root.__trad) return;
+  const dic=I18N[lang]||{}; traduciendo=true;
+  const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for(let n; (n=w.nextNode());){
+    if(n.parentElement?.closest("textarea,script,style,#histList .t,.nota,.aviso p,.sug p")) continue;
+    const o=ORIG.has(n)?ORIG.get(n):n.nodeValue; const k=o.trim(); if(!k) continue;
+    const limpio=k.replace(/^[^\p{L}]+/u,"").trim(); const pre=k.slice(0,k.length-limpio.length);
+    const tr=dic[limpio]; if(tr){ if(!ORIG.has(n)) ORIG.set(n,o); n.nodeValue=o.replace(k, pre+tr); } else if(ORIG.has(n) && lang==="es"){ n.nodeValue=ORIG.get(n); }
+  }
+  document.body.__trad=true; traduciendo=false;
+}
+const obsI18n=new MutationObserver(ms=>{ if(traducir&&!traduciendo&&lang!=="es") ms.forEach(m=>m.addedNodes.forEach(nd=>{ if(nd.nodeType===1) traducir(nd); })); });
+obsI18n.observe(document.body,{childList:true,subtree:true});
+$("#idioma").value=lang; $("#idiomaNota").hidden=lang==="es";
+$("#idioma").addEventListener("change",e=>{ lang=e.target.value; store.set("multas.idioma",lang); $("#idiomaNota").hidden=lang==="es"; document.documentElement.lang=lang==="va"?"ca":lang; if(lang==="es") location.reload(); else traducir(); });
+if(lang!=="es"){ document.documentElement.lang=lang==="va"?"ca":lang; setTimeout(()=>traducir(),300); }
+
+function handleTanda2(t,d){
+  if(d.vista){ const cal=d.vista==="cal"; $("#calBox").hidden=!cal; $("#vistaCal").setAttribute("aria-pressed",cal); $("#vistaLista").setAttribute("aria-pressed",!cal); renderCal(); return true; }
+  if(d.calnav){ calMes=new Date(calMes.getFullYear(), calMes.getMonth()+(+d.calnav), 1); calDia=null; renderCal(); return true; }
+  if(d.caldia){ calDia = calDia===d.caldia?null:d.caldia; renderCal(); return true; }
+  if(d.ficha){ abrirFicha(d.ficha); return true; }
+  if(t.id==="fanMercado"){ S.verMercado=!S.verMercado; renderFantasy(); return true; }
+  if(t.id==="fanTarjeta"){ tarjetaFantasy(); return true; }
+  if(d.notapartido){ const ev=evById(d.notapartido); const i=document.getElementById("np-"+d.notapartido); const v=(i?.value||"").trim(); if(!v){ toast("Escribe la nota"); return true; }
+    i.value=""; i.blur();
+    run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",ev.rival,"notas"),{jugador:"", partido:ev.id, texto:("Tras el partido del "+new Date(ev.fecha+"T12:00").toLocaleDateString("es-ES",{day:"numeric",month:"short"})+": "+v).slice(0,500), autor:email(), nombre:myName(), creado:Date.now(), notificada:false}),"Nota guardada en el scouting del rival"); return true; }
+  if(d.pzmodo){ PZ.modo=d.pzmodo; document.querySelectorAll("[data-pzmodo]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.pzmodo===PZ.modo)); return true; }
+  if(t.id==="pzDeshacer"){ PZ.trazos.pop(); pzDraw(); return true; }
+  if(t.id==="pzLimpiar"){ PZ.fichas=null; PZ.trazos=[]; pzInit(); return true; }
+  if(t.id==="pzGuardar"){ const nombre=$("#pzNombre").value.trim(); if(!nombre){ toast("Ponle un nombre a la jugada"); return true; }
+    run(()=>F.addDoc(col("jugadas"),{nombre, fichas:PZ.fichas.map(f=>({t:f.t,n:f.n,x:+f.x.toFixed(3),y:+f.y.toFixed(3)})), trazos:PZ.trazos.map(tr=>({p:tr})), autor:myName(), creado:Date.now()}),"Jugada guardada").then(ok=>{ if(ok) $("#pzNombre").value=""; }); return true; }
+  if(d.pzabrir){ const j=(S.jugadas||[]).find(x=>x.id===d.pzabrir); if(j){ PZ.fichas=j.fichas.map(f=>({...f})); PZ.trazos=(j.trazos||[]).map(x=>x.p); pzDraw(); window.scrollTo({top:0,behavior:"smooth"}); toast("Jugada: "+j.nombre); } return true; }
+  if(d.pzdel){ armed(t,"¿Borrar?",()=>run(()=>F.deleteDoc(F.doc(col("jugadas"),d.pzdel)),"Jugada borrada")); return true; }
+  return false;
+}
+
 /* ---------- conexión con los datos ---------- */
 function setStatus(msg){ const s=$("#status"); s.hidden=!msg; s.textContent=msg||""; }
 let unsubs=[];
@@ -1480,6 +1679,8 @@ function subscribe(){
     const mid=myPlayer()?.id||""; if(mid!==S.meId){ S.meId=mid; syncTokenPrefs(); }
     renderAll(); }, fail));
   fanUnsubs.forEach(u=>u()); fanUnsubs=[]; fanJornadaId=null;
+  unsubs.push(F.onSnapshot(col("jugadas"), s=>{ S.jugadas=s.docs.map(d=>({id:d.id,...d.data()})); renderPizarra(); }, e=>console.warn(e)));
+  unsubs.push(F.onSnapshot(col("jornadas"), s=>{ S.fanJornadas=s.docs.map(d=>({id:d.id,...d.data()})); renderFantasy(); }, e=>console.warn(e)));
   unsubs.push(F.onSnapshot(col("gastos"), s=>{ S.gastos=s.docs.map(d=>({id:d.id,...d.data()})); renderBote(); }, fail));
   unsubs.push(F.onSnapshot(F.query(col("registro"), F.orderBy("creado","desc"), F.limit(60)), s=>{ S.registro=s.docs.map(d=>({id:d.id,...d.data()})); renderLog(); }, e=>console.warn(e)));
   unsubs.push(F.onSnapshot(col("planes"), s=>{ S.planes=s.docs.map(d=>({id:d.id,...d.data()})); syncPlanListeners(); renderPlanes(); }, fail));

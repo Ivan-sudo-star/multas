@@ -832,7 +832,12 @@ def fantasy_cerrar(team, evid, ev, start, rival, jug, email_de, pid_de, particip
     ultima = {"rival": rival, "fecha": ev.get("fecha"), "mvpNombre": jug.get(mvp, {}).get("nombre", "") if mvp else "",
               "ganador": (clas.get(pid_de.get(ganador, ganador)) or {}).get("nombre", "") if ganador else "", "ganadorPts": resultados.get(ganador) if ganador else None}
     jref.set({"cerrada": True, "rival": rival, "fecha": ev.get("fecha"), "puntos": puntos, "mvp": mvp, "resultados": resultados})
-    est_ref.set({"precios": precios, "clasificacion": clas, "ultima": ultima}, merge=True)
+    hist = est.get("precioHist") or {}
+    for pid, pr_ in precios.items():
+        h = list(hist.get(pid) or [])
+        h.append({"f": ev.get("fecha"), "p": pr_})
+        hist[pid] = h[-30:]
+    est_ref.set({"precios": precios, "clasificacion": clas, "ultima": ultima, "precioHist": hist}, merge=True)
     partes = ([f"MVP: {nombre_corto(ultima['mvpNombre'])}"] if mvp else []) + \
         ([f"Ganó {nombre_corto(ultima['ganador'])} con {ultima['ganadorPts']} pts"] if ganador else ["Nadie hizo quinteto"])
     body = " · ".join(partes) + ". Mira la clasificación."
