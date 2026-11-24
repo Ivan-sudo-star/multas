@@ -1,7 +1,7 @@
 /* Layout: app de móvil, cabecera de club + vistas en columna + barra de pestañas inferior */
 :root{
   --bg:#f1f1f7; --surface:#ffffff; --ink:#17173d; --muted:#5f5f84; --line:#dddde9;
-  --navy:#29297a; --navy-ink:#ffffff; --orange:#f03c02; --orange-soft:#fde6dc;
+  --navy:#29297a; --navy-ink:#ffffff; --pz-def:#29297a; --orange:#f03c02; --orange-soft:#fde6dc;
   --ok:#1d7f48; --ok-soft:#dcf1e4; --chip:#ececf6;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -9,11 +9,11 @@
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0d0d1f; --surface:#191936; --ink:#ececfa; --muted:#a3a3c6; --line:#2c2c52;
-  --navy:#20205e; --navy-ink:#ffffff; --orange:#ff5b26; --orange-soft:#3a1c14;
+  --navy:#20205e; --navy-ink:#ffffff; --pz-def:#aab4ff; --orange:#ff5b26; --orange-soft:#3a1c14;
   --ok:#5bd08f; --ok-soft:#163226; --chip:#24244a; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0d0d1f; --surface:#191936; --ink:#ececfa; --muted:#a3a3c6; --line:#2c2c52;
-  --navy:#20205e; --navy-ink:#ffffff; --orange:#ff5b26; --orange-soft:#3a1c14;
+  --navy:#20205e; --navy-ink:#ffffff; --pz-def:#aab4ff; --orange:#ff5b26; --orange-soft:#3a1c14;
   --ok:#5bd08f; --ok-soft:#163226; --chip:#24244a; color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}

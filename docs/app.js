@@ -1598,8 +1598,10 @@ function notaPartidoHtml(ev){
 const PZ={modo:"mover", pasos:null, i:0, arrastra:null, trazo:null, abierta:null, anim:null};
 const pzCur=()=>PZ.pasos[PZ.i];
 // Tipos de trazo: mov = movimiento, bloq = bloqueo, pase, mano = mano a mano, opc = opción (no se ejecuta al pasar de paso)
-const PZ_KIND={dibujar:"mov", bloqueo:"bloq", pase:"pase", mano:"mano", opcion:"opc"};
-const pzBalon=k=>k==="pase"||k==="mano";
+const PZ_KIND={dibujar:"mov", bloqueo:"bloq", pase:"pase", mano:"mano", tiro:"tiro", opcion:"opc"};
+const pzBalon=k=>k==="pase"||k==="mano"||k==="tiro";
+const PZ_ARO=[0.5,52/560]; // centro del aro (relativo a la pista)
+let PZ_DEF="#29297a";
 function pzInicial(){ return {fichas:[...[0.5,0.15,0.85,0.25,0.75].map((x,i)=>({t:"a",n:i+1,x,y:[0.55,0.25,0.25,0.75,0.75][i]})), ...[0.5,0.3,0.7,0.35,0.65].map((x,i)=>({t:"d",n:i+1,x,y:[0.42,0.3,0.3,0.62,0.62][i]})), {t:"b",n:0,x:0.53,y:0.6}], trazos:[]}; }
 function pzInit(){ if(!PZ.pasos){ PZ.pasos=[pzInicial()]; PZ.i=0; } pzDraw(); }
 const pzCopia=st=>({fichas:st.fichas.map(f=>({...f})), trazos:st.trazos.map(t=>({k:t.k||"mov", p:[...t.p]}))});
@@ -1619,7 +1621,7 @@ function pzCadena(st,f,c){ let t=st.trazos.find(u=>{ const p=pzPadre(st,u,c); re
 function pzDraw(st){
   const c=$("#pzCanvas"); if(!c||!PZ.pasos) return; st=st||pzCur(); const g=c.getContext("2d"); const W=c.width,H=c.height;
   const css=getComputedStyle(document.documentElement); const lin=css.getPropertyValue("--muted").trim()||"#888"; const ink=css.getPropertyValue("--ink").trim()||"#17173d";
-  g.setLineDash([]); g.globalAlpha=1;
+  g.setLineDash([]); g.globalAlpha=1; PZ_DEF=css.getPropertyValue("--pz-def").trim()||"#29297a";
   g.clearRect(0,0,W,H); g.fillStyle=css.getPropertyValue("--orange-soft").trim()||"#fde7de"; g.fillRect(0,0,W,H);
   g.strokeStyle=lin; g.lineWidth=2;
   g.strokeRect(4,4,W-8,H-8);
@@ -1631,6 +1633,13 @@ function pzDraw(st){
   let nOpc=0;
   const flecha=(t)=>{ const pts=t.p; if(pts.length<4) return; const k=t.k||"mov", opc=k==="opc";
     g.save(); if(opc){ g.strokeStyle=g.fillStyle="#2a6fdb"; g.lineWidth=3; g.globalAlpha=0.85; }
+    if(k==="tiro"){ // tiro: línea naranja gruesa hasta el aro, aro marcado y etiqueta «TIRO»
+      const ax=PZ_ARO[0]*W, ay=PZ_ARO[1]*H, x0=pts[0]*W, y0=pts[1]*H; g.strokeStyle=g.fillStyle="#f03c02"; g.lineWidth=5;
+      g.beginPath(); g.moveTo(x0,y0); g.lineTo(ax,ay); g.stroke();
+      g.lineWidth=4; g.beginPath(); g.arc(ax,ay,20,0,2*Math.PI); g.stroke();
+      g.font="800 15px Inter, sans-serif"; const w=g.measureText("TIRO").width+16, lx=ax+(x0<ax?-1:1)*(20+w/2+6);
+      g.beginPath(); g.roundRect?g.roundRect(lx-w/2,ay-12,w,24,12):g.rect(lx-w/2,ay-12,w,24); g.fill();
+      g.fillStyle="#fff"; g.textAlign="center"; g.textBaseline="middle"; g.fillText("TIRO",lx,ay+1); g.restore(); return; }
     g.setLineDash(k==="pase"?[10,9]:opc?[3,8]:[]); g.beginPath(); g.moveTo(pts[0]*W,pts[1]*H); for(let i=2;i<pts.length;i+=2) g.lineTo(pts[i]*W,pts[i+1]*H); g.stroke(); g.setLineDash([]);
     const n=pts.length; const x2=pts[n-2]*W,y2=pts[n-1]*H,x1=pts[Math.max(0,n-6)]*W,y1=pts[Math.max(1,n-5)]*H; const a=Math.atan2(y2-y1,x2-x1);
     if(k==="bloq"){ // bloqueo: barra perpendicular al final
@@ -1657,7 +1666,7 @@ function pzDraw(st){
 function pzFicha(g,f,W,H){ const x=f.x*W,y=f.y*H; g.lineWidth=3; g.setLineDash([]);
   if(f.t==="a"){ g.fillStyle="#f03c02"; g.beginPath(); g.arc(x,y,22,0,2*Math.PI); g.fill(); g.fillStyle="#fff"; g.font="800 24px Inter, sans-serif"; g.textAlign="center"; g.textBaseline="middle"; g.fillText(f.n,x,y+1); }
   else if(f.t==="b"){ g.fillStyle="#f5a623"; g.strokeStyle="#5a3200"; g.lineWidth=2; g.beginPath(); g.arc(x,y,11,0,2*Math.PI); g.fill(); g.stroke(); g.beginPath(); g.moveTo(x-11,y); g.lineTo(x+11,y); g.moveTo(x,y-11); g.lineTo(x,y+11); g.stroke(); }
-  else { g.strokeStyle="#29297a"; g.lineWidth=5; g.beginPath(); g.moveTo(x-15,y-15); g.lineTo(x+15,y+15); g.moveTo(x+15,y-15); g.lineTo(x-15,y+15); g.stroke(); } }
+  else { g.strokeStyle=PZ_DEF; g.lineWidth=5; g.beginPath(); g.moveTo(x-15,y-15); g.lineTo(x+15,y+15); g.moveTo(x+15,y-15); g.lineTo(x-15,y+15); g.stroke(); } }
 // Quien lleva el balón (si no hay pase, el balón va con él)
 function pzPortador(st,c){ const b=st.fichas.find(f=>f.t==="b"); if(!b||st.trazos.some(t=>pzBalon(t.k)&&pzDueno(st,t,c)===b)) return null;
   let best=null,d=40; st.fichas.forEach(f=>{ if(f.t!=="a") return; const dd=Math.hypot((f.x-b.x)*c.width,(f.y-b.y)*c.height); if(dd<d){ d=dd; best=f; } }); return best?{b,f:best}:null; }
@@ -1692,7 +1701,7 @@ function pzPos(e){ const c=$("#pzCanvas"), r=c.getBoundingClientRect(); return {
     if(PZ.modo==="mover"){ const fs=pzCur().fichas; PZ.arrastra=[...fs.filter(f=>f.t==="b"),...fs.filter(f=>f.t!=="b").reverse()].find(f=>Math.hypot((f.x-p.x)*c.width,(f.y-p.y)*c.height)<(f.t==="b"?22:30))||null; }
     else PZ.trazo={k:PZ_KIND[PZ.modo]||"mov", p:[+p.x.toFixed(3),+p.y.toFixed(3)]}; });
   c.addEventListener("pointermove",e=>{ const p=pzPos(e); if(PZ.arrastra){ PZ.arrastra.x=p.x; PZ.arrastra.y=p.y; pzDraw(); } else if(PZ.trazo){ const q=PZ.trazo.p, n=q.length; if(Math.hypot((q[n-2]-p.x)*c.width,(q[n-1]-p.y)*c.height)>8){ q.push(+p.x.toFixed(3),+p.y.toFixed(3)); pzDraw(); } } });
-  const fin=()=>{ if(PZ.trazo && PZ.trazo.p.length>=4){ if(pzBalon(PZ.trazo.k)){ const q=PZ.trazo.p; PZ.trazo.p=[q[0],q[1],q[q.length-2],q[q.length-1]]; } pzCur().trazos.push(PZ.trazo); } PZ.trazo=null; PZ.arrastra=null; pzDraw(); };
+  const fin=()=>{ if(PZ.trazo && PZ.trazo.p.length>=4){ if(PZ.trazo.k==="tiro"){ const q=PZ.trazo.p; PZ.trazo.p=[q[0],q[1],PZ_ARO[0],+PZ_ARO[1].toFixed(3)]; } else if(pzBalon(PZ.trazo.k)){ const q=PZ.trazo.p; PZ.trazo.p=[q[0],q[1],q[q.length-2],q[q.length-1]]; } pzCur().trazos.push(PZ.trazo); } PZ.trazo=null; PZ.arrastra=null; pzDraw(); };
   c.addEventListener("pointerup",fin); c.addEventListener("pointercancel",fin);
 })();
 function pzDatos(){ return PZ.pasos.map(st=>({fichas:st.fichas.map(f=>({t:f.t,n:f.n,x:+(+f.x).toFixed(3),y:+(+f.y).toFixed(3)})), trazos:st.trazos.map(t=>({k:t.k||"mov",p:t.p}))})); }
