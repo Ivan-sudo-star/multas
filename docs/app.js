@@ -191,15 +191,17 @@ function haceCuanto(ms){
 }
 function renderAvisos(){
   const card=$("#avisosCard"); if(!card) return;
-  const list=[...S.avisos].sort((a,b)=>(b.creado||0)-(a.creado||0));
+  // Avisos solo para administradores: colección aparte que solo ellos pueden leer
+  if(S.canWrite && !S.avAdminUnsub && teamOpen){ S.avAdminUnsub=F.onSnapshot(col("avisosAdmin"), s=>{ S.avisosAdmin=s.docs.map(d=>({id:d.id,admin:true,...d.data()})); renderAvisos(); }, e=>console.warn(e)); unsubs.push(()=>{ S.avAdminUnsub?.(); S.avAdminUnsub=null; S.avisosAdmin=[]; }); }
+  const list=[...S.avisos, ...(S.canWrite?(S.avisosAdmin||[]):[])].sort((a,b)=>(b.creado||0)-(a.creado||0));
   card.hidden = !teamOpen || (!list.length && !S.canWrite);
   $("#avForm").hidden=!S.canWrite;
   const seen=store.get("multas.avSeen."+TEAM,0);
   const shown=S.showAllAv?list:list.slice(0,3);
   $("#avCount").textContent = list.length>3 ? list.length+" avisos" : "";
-  $("#avList").innerHTML = shown.length ? shown.map(a=>`<li class="aviso ${(a.creado||0)>seen&&a.autor!==S.user?.uid?"nuevo":""}">
-      <p>${esc(a.texto)}</p>
-      <span class="meta"><span>${esc(a.autorNombre||"Administrador")} · ${esc(haceCuanto(a.creado||0))}</span>${S.canWrite?`<button type="button" class="btn small danger" data-avdel="${esc(a.id)}">Borrar</button>`:""}</span>
+  $("#avList").innerHTML = shown.length ? shown.map(a=>`<li class="aviso ${(a.creado||0)>seen&&a.autor!==S.user?.uid?"nuevo":""} ${a.admin?"adm-av":""}">
+      ${a.admin?'<span class="pill old" style="align-self:flex-start">🛡️ Solo administradores</span>':""}<p>${esc(a.texto)}</p>
+      <span class="meta"><span>${esc(a.autorNombre||"Administrador")} · ${esc(haceCuanto(a.creado||0))}</span>${S.canWrite?`<button type="button" class="btn small danger" data-avdel="${esc(a.id)}" data-avcol="${a.admin?"avisosAdmin":"avisos"}">Borrar</button>`:""}</span>
     </li>`).join("") + (list.length>3?`<li><button type="button" class="btn small ghost" id="avMore">${S.showAllAv?"Ver menos":"Ver todos ("+list.length+")"}</button></li>`:"")
     : '<li class="note">Todavía no hay avisos. Escribe el primero abajo.</li>';
   if(list.length && !$("#v-resumen").hidden){ clearTimeout(S.avSeenT); S.avSeenT=setTimeout(()=>store.set("multas.avSeen."+TEAM,Date.now()),4000); }
@@ -579,7 +581,10 @@ document.addEventListener("click", e=>{
   if(d.dia!==undefined){ t.setAttribute("aria-pressed", t.getAttribute("aria-pressed")!=="true"); return; }
   if(t.id==="diasSave"){ saveDias(); return; }
   if(t.id==="avMore"){ S.showAllAv=!S.showAllAv; renderAvisos(); return; }
-  if(d.avdel){ armed(t,"¿Borrar? Toca otra vez",()=>run(()=>F.deleteDoc(dref("avisos",d.avdel)),"Aviso borrado")); return; }
+  if(d.avdel){ armed(t,"¿Borrar? Toca otra vez",()=>run(()=>F.deleteDoc(F.doc(col(d.avcol||"avisos"),d.avdel)),"Aviso borrado")); return; }
+  if(d.avpara){ S.avPara=d.avpara; const adm=d.avpara==="admins"; document.querySelectorAll("[data-avpara]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.avpara===d.avpara));
+    $("#avText").maxLength=adm?1500:300; $("#avLabel").textContent=adm?"Nuevo aviso solo para administradores":"Nuevo aviso para todo el equipo"; $("#avSend").textContent=adm?"Enviar a los administradores":"Enviar a todo el equipo";
+    $("#avLeft").textContent=(adm?1500:300)-$("#avText").value.length; return; }
   if(t.id==="evMore"){ S.showAllPast=true; renderAsis(); return; }
   if(d.evopen){ S.openEv = S.openEv===d.evopen?null:d.evopen; renderAsis(); return; }
   if(d.rsvp){ const [id,v]=d.rsvp.split("|"); const ev=evById(id); const me=myPlayer(); if(!ev||!me) return;
@@ -679,13 +684,14 @@ $("#pagoForm").addEventListener("submit",e=>{
 });
 $("#evTipo").addEventListener("change",()=>renderAsis());
 ["pgTipo","pgPct","pgMin","pgFijo"].forEach(id=>$("#"+id).addEventListener("input",pagoEjemplo));
-$("#avText").addEventListener("input",()=>{ $("#avLeft").textContent=300-$("#avText").value.length; });
+$("#avText").addEventListener("input",()=>{ $("#avLeft").textContent=(S.avPara==="admins"?1500:300)-$("#avText").value.length; });
 $("#avForm").addEventListener("submit",e=>{
   e.preventDefault();
   const texto=$("#avText").value.trim(); if(!texto){ toast("Escribe el aviso"); return; }
   const btn=$("#avSend"); btn.disabled=true;
-  run(()=>F.addDoc(col("avisos"),{texto, autor:S.user?.uid||"", autorNombre:myPlayer()?.nombre||email(), creado:Date.now(), notificada:false}),"Aviso publicado. La notificación llegará en unos minutos")
-    .then(ok=>{ btn.disabled=false; if(ok){ $("#avText").value=""; $("#avLeft").textContent="300"; } });
+  const adm=S.avPara==="admins";
+  run(()=>F.addDoc(col(adm?"avisosAdmin":"avisos"),{texto, autor:S.user?.uid||"", autorNombre:myPlayer()?.nombre||email(), creado:Date.now(), notificada:false}),adm?"Aviso enviado a los administradores":"Aviso publicado. La notificación llegará en unos minutos")
+    .then(ok=>{ btn.disabled=false; if(ok){ $("#avText").value=""; $("#avLeft").textContent=adm?"1500":"300"; } });
 });
 $("#evForm").addEventListener("submit",e=>{
   e.preventDefault();

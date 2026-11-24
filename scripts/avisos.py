@@ -131,6 +131,7 @@ def avisar_multas():
             return toks_team.get(team_id, [])
         total += avisar_eventos(team, toks)
         total += avisar_tablon(team, toks)
+        total += avisar_tablon_admins(team, toks)
         total += avisar_viernes_equipo(team, toks)
         total += avisar_planes(team, toks)
         total += pagos_equipo(team, toks)
@@ -509,6 +510,23 @@ def avisar_viernes_equipo(team, toks):
 
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
          "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+def avisar_tablon_admins(team, toks):
+    """Avisos del tablón marcados «solo administradores»: la notificación solo les llega a ellos."""
+    nuevos = list(team.reference.collection("avisosAdmin").where(filter=firestore.FieldFilter("notificada", "==", False)).stream())
+    if not nuevos:
+        return 0
+    t = team.to_dict() or {}
+    admins = {str(a).lower() for a in t.get("admins", [])}
+    emails = {p.id: str((p.to_dict() or {}).get("email", "")).lower() for p in team.reference.collection("jugadores").stream()}
+    for d in nuevos:
+        a = d.to_dict() or {}
+        msgs = [(tok, f"🛡️ Para administradores · {a.get('autorNombre') or ''}".strip(" ·"), str(a.get("texto", ""))[:450])
+                for tok, info in toks() if emails.get(info.get("jugador", "")) in admins]
+        send_each(msgs, data={"tipo": "aviso"}, view="resumen")
+        d.reference.update({"notificada": True})
+    return len(nuevos)
 
 
 def avisar_planes(team, toks):

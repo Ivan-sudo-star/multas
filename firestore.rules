@@ -131,6 +131,12 @@ service cloud.firestore {
                          request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 300;
         allow update, delete: if isAdminOf(e);
       }
+      // Avisos solo para administradores: nadie más los puede leer
+      match /avisosAdmin/{id} {
+        allow read, update, delete: if isAdminOf(e);
+        allow create: if isAdminOf(e) && request.resource.data.texto is string &&
+                         request.resource.data.texto.size() > 0 && request.resource.data.texto.size() <= 1500;
+      }
 
       // Entrenos y partidos. Cada jugador solo puede cambiar su propia respuesta (voy / no voy)
       // y su comentario; pasar lista, crear y borrar es cosa de los administradores.
