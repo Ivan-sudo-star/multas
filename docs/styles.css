@@ -375,3 +375,12 @@ label.filebtn{cursor:pointer;display:inline-flex;align-items:center}
 .pzfoto{margin:0;padding:6px}
 .pzfoto img{width:100%;height:auto;border-radius:9px;display:block}
 .pzfoto figcaption{padding:4px 4px 0}
+.colores{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatch{display:flex;border:2px solid var(--line);border-radius:12px;padding:3px;background:var(--surface);gap:0}
+.swatch i{display:block;width:22px;height:30px}
+.swatch i:first-child{border-radius:8px 0 0 8px}.swatch i:last-child{border-radius:0 8px 8px 0}
+.swatch[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface) inset}
+input[type="color"]{width:100%;height:42px;padding:2px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.prbox{padding:6px 0 10px;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.f-lbl{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}

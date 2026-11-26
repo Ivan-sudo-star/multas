@@ -236,7 +236,8 @@ AVISO_VISPERA = time(17, 0)  # hora del aviso del día anterior
 def plazo_cfg(team_data):
     p = team_data.get("plazo") or {}
     return {"activo": bool(p.get("activo")), "aviso": float(p.get("aviso") or RECORDAR_ANTES),
-            "cierre": float(p.get("cierre") if p.get("cierre") is not None else 3), "tipo": p.get("tipo") or ""}
+            "cierre": float(p.get("cierre") if p.get("cierre") is not None else 3), "tipo": p.get("tipo") or "",
+            "cada": max(1, min(5, int(p.get("cada") or 1)))}
 
 
 def inicio(ev):
@@ -466,6 +467,10 @@ def multar_sin_respuesta(team, pl, eventos):
         tipo = (t.id, t.to_dict()) if t.exists else None
     jugadores = [(p.id, p.to_dict() or {}) for p in team.reference.collection("jugadores").stream()]
     batch, n = db.batch(), 0
+    cada = pl.get("cada", 1)
+    cuenta = {pid: int(p.get("sinContestar") or 0) for pid, p in jugadores}   # veces sin contestar acumuladas
+    fechas = {pid: list(p.get("sinContestarFechas") or []) for pid, p in jugadores}
+    tocados = set()
     for evid, d in eventos.items():
         ev = d.to_dict() or {}
         upd = {"plazoCerrado": True, "multadosPlazo": []}
@@ -481,16 +486,28 @@ def multar_sin_respuesta(team, pl, eventos):
                     continue
                 if confirma.get(email) in ("si", "no"):
                     continue
+                cuenta[pid] += 1
+                fechas[pid].append(ev["fecha"])
+                tocados.add(pid)
+                if cuenta[pid] < cada:
+                    continue   # aún no llega: se apunta y la app le avisa de cuántas lleva
                 tid, t = tipo
                 precio = float(t.get("precio") or 0)
+                nota = (f"No contestó a la asistencia del entreno de las {ev.get('hora', '')}" if cada == 1 else
+                        f"{cada} entrenos sin contestar a la asistencia ({', '.join(f[8:10] + '/' + f[5:7] for f in fechas[pid][-cada:])})")
                 batch.set(team.reference.collection("multas").document(), {
                     "jugador": pid, "jugadorNombre": p.get("nombre", ""), "tipo": tid, "tipoNombre": t.get("nombre", ""),
                     "unidad": "fijo", "precio": precio, "cantidad": 1, "importe": precio, "fecha": ev["fecha"],
-                    "nota": f"No contestó a la asistencia del entreno de las {ev.get('hora', '')}", "pagada": False,
+                    "nota": nota[:120], "pagada": False,
                     "notificada": False, "creado": int(datetime.now(TZ).timestamp() * 1000), "autor": "plazo"})
                 upd["multadosPlazo"].append(pid)
+                cuenta[pid] = 0
+                fechas[pid] = []
                 n += 1
         batch.update(d.reference, upd)
+    for pid in tocados:
+        batch.update(team.reference.collection("jugadores").document(pid),
+                     {"sinContestar": cuenta[pid], "sinContestarFechas": fechas[pid][-5:]})
     batch.commit()
     print(f"Plazo cerrado en {len(eventos)} entrenos, {n} multas por no contestar")
 
@@ -593,8 +610,11 @@ def pagos_equipo(team, toks):
         propietario = str(t.get("propietario", "")).lower()
         emails = {p.id: str((p.to_dict() or {}).get("email", "")).lower() for p in team.reference.collection("jugadores").stream()}
         resumen = ", ".join(f"{nombre_corto(n)} {eur(v)}" for n, v in sorted(pend.values(), key=lambda x: -x[1]))
+        prorr = prorrogas(team)
         for tok, info in toks():
             pid = info.get("jugador", "")
+            if pid in pend and pid in prorr and prorr[pid]["hasta"] >= fin.isoformat():
+                continue   # tiene más tiempo: ya le avisaremos antes de que acabe
             if pid in pend:
                 mensajes.append((tok, f"💶 Tienes {eur(pend[pid][1])} de multas sin pagar",
                                  f"Págalas antes del {cuando}. Si no, se aplicará {texto_recargo}."))
@@ -609,10 +629,13 @@ def pagos_equipo(team, toks):
     pym = f"{prev.year}-{prev.month:02d}"
     if hoy.day == 1 and ahora.hour >= 10 and t.get("recargoAplicado") != pym:
         pend = deudas(team, lambda m: mes_cobro(m["fecha"]) == pym and m.get("tipo") != "recargo")
+        prorr = prorrogas(team)
         batch = db.batch()
         for pid, (nombre, total) in pend.items():
             if total <= 0:
                 continue
+            if pid in prorr and prorr[pid]["hasta"] >= hoy.isoformat():
+                continue   # con prórroga: el recargo se mira cuando acabe
             importe = cant_fija if fijo else max(minimo, math.ceil(total * pct / 100 * 2) / 2)
             batch.set(team.reference.collection("multas").document(), {
                 "jugador": pid, "jugadorNombre": nombre, "tipo": "recargo",
@@ -625,6 +648,61 @@ def pagos_equipo(team, toks):
         batch.commit()
         print(f"::notice::Recargos aplicados: {len(pend)}")
         hecho += 1
+    hecho += prorrogas_avisos(team, toks, pct, minimo, fijo, cant_fija, ahora)
+    return hecho
+
+
+def prorrogas(team):
+    out = {}
+    for p in team.reference.collection("jugadores").stream():
+        r = (p.to_dict() or {}).get("prorroga") or {}
+        if r.get("hasta"):
+            out[p.id] = r
+    return out
+
+
+def prorrogas_avisos(team, toks, pct, minimo, fijo, cant_fija, ahora):
+    """Prórrogas de pago: aviso al darla, recordatorio la víspera y recargo si al acabar sigue sin pagar."""
+    hoy = ahora.date()
+    prorr = prorrogas(team)
+    if not prorr:
+        return 0
+    tokens = {}
+    for tok, info in toks():
+        tokens.setdefault(info.get("jugador", ""), []).append(tok)
+    mensajes, hecho = [], 0
+    for pid, r in prorr.items():
+        ref = team.reference.collection("jugadores").document(pid)
+        hasta = date.fromisoformat(r["hasta"])
+        cuando = f"{hasta.day} de {MESES[hasta.month - 1]}"
+        if not r.get("notificada"):
+            for tok in tokens.get(pid, []):
+                mensajes.append((tok, "⏳ Tienes más tiempo para pagar", f"Puedes pagar tus multas sin recargo hasta el {cuando}."))
+            ref.update({"prorroga.notificada": True})
+            hecho += 1
+        if hoy == hasta - timedelta(days=1) and ahora.hour >= 18 and not r.get("recordada"):
+            pend = deudas(team, lambda m: m.get("jugador") == pid and mes_cobro(m["fecha"]) <= r.get("mes", "9999"))
+            if pend.get(pid, ("", 0))[1] > 0:
+                for tok in tokens.get(pid, []):
+                    mensajes.append((tok, "⏳ Mañana acaba tu plazo para pagar",
+                                     f"Tienes {eur(pend[pid][1])} pendientes. Si no pagas el {cuando}, se aplicará el recargo."))
+            ref.update({"prorroga.recordada": True})
+            hecho += 1
+        if hoy > hasta and ahora.hour >= 10 and not r.get("revisada"):
+            mes = r.get("mes", "")
+            pend = deudas(team, lambda m: m.get("jugador") == pid and mes_cobro(m["fecha"]) <= mes and m.get("tipo") != "recargo")
+            nombre, total = pend.get(pid, ("", 0))
+            if total > 0:
+                importe = cant_fija if fijo else max(minimo, math.ceil(total * pct / 100 * 2) / 2)
+                team.reference.collection("multas").document().set({
+                    "jugador": pid, "jugadorNombre": nombre, "tipo": "recargo",
+                    "tipoNombre": "Recargo por no pagar (prórroga acabada)" if fijo else f"Recargo {pct:g} % por no pagar (prórroga acabada)",
+                    "unidad": "fijo", "precio": importe, "cantidad": 1, "importe": importe, "fecha": hoy.isoformat(),
+                    "nota": f"Pendiente al acabar la prórroga del {cuando}: {eur(total)}", "pagada": False, "notificada": False,
+                    "creado": int(ahora.timestamp() * 1000), "autor": "recargo"})
+            ref.update({"prorroga.revisada": True})
+            hecho += 1
+    send_each(mensajes, data={"tipo": "aviso"}, view="resumen")
     return hecho
 
 

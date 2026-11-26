@@ -1,5 +1,5 @@
 // Service worker: funciona sin conexión y muestra las notificaciones push.
-const CACHE = "multas-v43";
+const CACHE = "multas-v44";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "firebase-config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/escudo-128.png", "icons/balon.png", "privacidad.html", "i18n.json"];
 
@@ -10,17 +10,25 @@ self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
-// Primero la red (para recibir cambios), y la copia guardada si no hay conexión.
+// Primero la red (para recibir cambios). Si la red tarda más de 4 s o falla, la copia guardada.
+// Solo se guardan respuestas buenas: nunca un error que luego deje la app colgada.
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
-  e.respondWith(
-    fetch(e.request, { cache: "no-cache" }).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy));
-      return res;
-    }).catch(() => caches.match(e.request).then(r => r || caches.match("index.html")))
-  );
+  const red = fetch(e.request, { cache: "no-cache" }).then(res => {
+    if (res && res.ok && res.type === "basic") { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {}); }
+    return res;
+  });
+  const guardada = () => caches.match(e.request, { ignoreSearch: e.request.mode === "navigate" })
+    .then(r => r || (e.request.mode === "navigate" ? caches.match("index.html") : undefined));
+  e.respondWith(new Promise(resolve => {
+    let hecho = false;
+    const dar = r => { if (!hecho && r) { hecho = true; resolve(r); } };
+    const t = setTimeout(() => guardada().then(dar), 4000);
+    red.then(r => { clearTimeout(t); if (r.ok || !hecho) { if (!r.ok) guardada().then(g => dar(g || r)); else dar(r); } })
+       .catch(() => { clearTimeout(t); guardada().then(g => { if (g) dar(g); else if (!hecho) { hecho = true; resolve(Response.error()); } }); });
+  }));
+  e.waitUntil(red.catch(() => {}));
 });
 
 // Notificaciones push (Firebase Cloud Messaging)

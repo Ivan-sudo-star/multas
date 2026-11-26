@@ -111,6 +111,40 @@ const myPlayer = () => { const e=email(); return e ? S.jug.find(p=>String(p.emai
 const isNew = m => (m.creado||0) > S.lastSeen && m.autor !== (S.user&&S.user.uid);
 function totals(list){ let t=0,p=0; list.forEach(m=>{ t+=+m.importe||0; if(!m.pagada) p+=+m.importe||0; }); return {t, p, c:t-p}; }
 
+/* ---------- reparar: borra la copia guardada (service worker y caché) y recarga ---------- */
+async function repararApp(){
+  try{ const regs=await navigator.serviceWorker?.getRegistrations?.()||[]; await Promise.all(regs.map(r=>r.unregister())); }catch{}
+  try{ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); }catch{}
+  location.replace(location.pathname+"?r="+Date.now()+location.hash);
+}
+document.addEventListener("click",e=>{ if(e.target.closest("#reparar,#repararAviso")){ e.preventDefault(); toast("Reparando…"); repararApp(); } });
+// Si tras 15 s sigue «Cargando…», ofrecer reparar
+setTimeout(()=>{ if(!(S.ready.j&&S.ready.m) && teamOpen){ const el=$("#periodText"); if(el && !$("#repararAviso")) el.insertAdjacentHTML("afterend",'<button type="button" class="btn small" id="repararAviso">🔧 Tarda mucho: reparar la app</button>'); } },15000);
+/* ---------- colores del equipo ---------- */
+const COLORES=[["#29297a","#f03c02","Azul y naranja"],["#b3121f","#1f1f1f","Rojo y negro"],["#0b6b3a","#d99a00","Verde y dorado"],["#0a3d91","#e0a800","Azul y amarillo"],["#1d1d1f","#c8961e","Negro y dorado"],["#5b2a86","#e2457a","Morado y rosa"],["#0e5f73","#e85d04","Petróleo y naranja"],["#7a1020","#2f6fd6","Granate y azul"]];
+const hexRgb=h=>{ const m=String(h||"").match(/^#?([0-9a-f]{6})$/i); if(!m) return null; const n=parseInt(m[1],16); return [n>>16&255,n>>8&255,n&255]; };
+const rgbHex=c=>"#"+c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("");
+const lumi=c=>{ const f=v=>{ v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); }; return 0.2126*f(c[0])+0.7152*f(c[1])+0.0722*f(c[2]); };
+const mezcla=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+// Oscurece hasta que el texto blanco se lea bien (contraste ≥ 3)
+function legible(c){ let x=c; for(let i=0;i<12 && (1.05/(lumi(x)+0.05))<3; i++) x=mezcla(x,[0,0,0],0.12); return x; }
+function aplicarColores(col){
+  let st=document.getElementById("teamColors"); if(!st){ st=document.createElement("style"); st.id="teamColors"; document.head.appendChild(st); }
+  const p=hexRgb(col?.p), a=hexRgb(col?.a);
+  if(!p||!a){ st.textContent=""; document.querySelector('meta[name="theme-color"]')?.setAttribute("content","#29297a"); return; }
+  const pl=legible(p), al=legible(a), pd=mezcla(pl,[0,0,0],0.3), ad=mezcla(a,[255,255,255],0.1);
+  const claro=`--navy:${rgbHex(pl)};--orange:${rgbHex(al)};--orange-soft:${rgbHex(mezcla(al,[255,255,255],0.86))};--pz-def:${rgbHex(pl)}`;
+  const oscuro=`--navy:${rgbHex(pd)};--orange:${rgbHex(ad)};--orange-soft:${rgbHex(mezcla(ad,[13,13,31],0.78))}`;
+  st.textContent=`:root{${claro}} @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){${oscuro}}} :root[data-theme="dark"]{${oscuro}}`;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content",rgbHex(pl));
+}
+// Al abrir, los colores guardados de la última vez (para que no parpadee)
+try{ aplicarColores(store.get("multas.colores."+TEAM,null)); }catch{}
+function renderColores(){
+  const box=$("#tcColores"); if(!box) return; const cur=S.aj.colores||{};
+  box.innerHTML=COLORES.map(([p,a,n])=>`<button type="button" class="swatch" data-colp="${p}" data-cola="${a}" aria-pressed="${cur.p===p&&cur.a===a||(!cur.p&&p==="#29297a")}" title="${esc(n)}" aria-label="${esc(n)}"><i style="background:${p}"></i><i style="background:${a}"></i></button>`).join("");
+  if(document.activeElement?.type!=="color"){ $("#tcColP").value=cur.p||"#29297a"; $("#tcColA").value=cur.a||"#f03c02"; }
+}
 /* ---------- navegación ---------- */
 document.addEventListener("toggle",e=>{ if(e.target.id==="evNextMore") S.nextOpen=e.target.open; },true);
 const VIEWS=["resumen","asistencia","anadir","planes","historial","equipo","ajustes","scouting","ayuda","fantasy","ficha","pizarra","jugadas"];
@@ -220,7 +254,7 @@ function renderMe(){
     el.innerHTML=`<div class="who-line"><span class="row" style="gap:10px;flex-wrap:nowrap"><span class="av ${me.rol==="entrenador"?"coach":""} ${hasDor(me)?"num":""}">${esc(avTxt(me))}</span><span><h3>Tus multas</h3><b>${esc(me.nombre)}</b></span></span>
       <span class="amt"><b>${eur(T.p)}</b><span${T.p?"":' class="paid"'}>${T.p?"por pagar":"todo pagado"}</span></span></div>
       <p class="note">${mine.length} ${mine.length===1?"apunte":"apuntes"} · ${eur(T.t)} en total${S.aj.inicio?" desde "+esc(monthName(S.aj.inicio)):""}</p>
-      ${pagoAviso(me)}
+      ${pagoAviso(me)}${sinContestarAviso(me)}
       <div class="row"><button type="button" class="btn small ghost" id="myHist">Ver mis multas</button></div>`;
   } else {
     const prev=$("#claimSel")?.value||"";
@@ -242,7 +276,7 @@ const evTitle = ev => (EV_TXT[ev.tipo]||"Evento")+(ev.nota?" · "+ev.nota:"");
 const pkey = p => String(p?.email||"").toLowerCase();
 const confirmOf = (ev,p) => p && p.email ? (ev.confirma||{})[pkey(p)] : undefined;
 const noteOf = (ev,p) => p && p.email ? String((ev.notas||{})[pkey(p)]||"") : "";
-const plazoCfg = () => { const p=S.aj.plazo||{}; return {activo:!!p.activo, aviso:+p.aviso||8, cierre:(p.cierre===0?0:(+p.cierre||3)), tipo:p.tipo||""}; };
+const plazoCfg = () => { const p=S.aj.plazo||{}; return {activo:!!p.activo, aviso:+p.aviso||8, cierre:(p.cierre===0?0:(+p.cierre||3)), tipo:p.tipo||"", cada:Math.min(5,Math.max(1,+p.cada||1))}; };
 const fmtHora = ms => new Date(ms).toLocaleTimeString(LOC,{hour:"2-digit",minute:"2-digit"});
 const fmtCierre = ms => { const d=new Date(ms), t=new Date(); const same=d.toDateString()===t.toDateString();
   return (same?"hoy":d.toLocaleDateString(LOC,{weekday:"long",day:"numeric"}))+" a las "+fmtHora(ms); };
@@ -434,6 +468,7 @@ function renderAjustes(){
   $("#teamAdmin").hidden = !S.canWrite;
   if(S.canWrite && document.activeElement!==$("#tcNameIn")) $("#tcNameIn").value = S.aj.nombre||"";
   $("#tcFri").checked = !!S.aj.viernes;
+  renderColores();
   $("#tcCrestDel").hidden = !S.aj.escudo;
   $("#nFriWrap").hidden = !S.aj.viernes;
   renderPagoCfg();
@@ -443,11 +478,11 @@ function renderAjustes(){
   renderFanCfg();
   { const pl=plazoCfg(); const t=typeById(pl.tipo);
     $("#plSummary").textContent = pl.activo
-      ? `Recordatorio ${pl.aviso} h antes del entreno (si es por la mañana, el día anterior a las 17:00). El plazo para contestar se cierra ${pl.cierre} h antes (si es por la mañana, el día anterior a las 23:59). 1 h antes del cierre se avisa otra vez a quien no haya contestado. Quien no conteste recibe «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
+      ? `Recordatorio ${pl.aviso} h antes del entreno (si es por la mañana, el día anterior a las 17:00). El plazo para contestar se cierra ${pl.cierre} h antes (si es por la mañana, el día anterior a las 23:59). 1 h antes del cierre se avisa otra vez a quien no haya contestado. ${pl.cada>1?`Cada ${pl.cada} veces sin contestar se pone`:"Quien no conteste recibe"} «${t?t.nombre+" ("+eur(t.precio)+")":"multa sin elegir"}».`
       : "Desactivado: no hay plazo ni multa por no contestar. Los recordatorios llegan 8 h antes.";
     $("#plEdit").hidden = !S.canWrite;
     if(S.canWrite && !document.activeElement?.closest("#plazoForm")){
-      $("#plActivo").checked=pl.activo; $("#plAviso").value=pl.aviso; $("#plCierre").value=pl.cierre;
+      $("#plActivo").checked=pl.activo; $("#plAviso").value=pl.aviso; $("#plCierre").value=pl.cierre; $("#plCada").value=String(pl.cada);
       const tipos=[...S.tipos].sort((a,b)=>(a.orden??99)-(b.orden??99));
       const def = pl.tipo || (tipos.find(x=>/falta.*entreno/i.test(x.nombre))||tipos[0]||{}).id || "";
       $("#plTipo").innerHTML = tipos.map(x=>`<option value="${esc(x.id)}">${esc(x.nombre)} · ${eur(x.precio)}</option>`).join("");
@@ -666,7 +701,8 @@ $("#plazoForm").addEventListener("submit",e=>{
   const tipo=$("#plTipo").value; if($("#plActivo").checked && !tipo){ toast("Elige qué multa se pone"); return; }
   const activo=$("#plActivo").checked;
   const b=F.writeBatch(db);
-  b.update(teamRef(),{plazo:{activo, aviso, cierre, tipo}});
+  const cada=Math.min(5,Math.max(1,+$("#plCada").value||1));
+  b.update(teamRef(),{plazo:{activo, aviso, cierre, tipo, cada}});
   // Aplicar también a los entrenos ya creados que aún no han empezado
   let n=0;
   S.eventos.filter(ev=>ev.tipo==="entreno" && ev.hora && ev.fecha>=today() && !ev.plazoCerrado).forEach(ev=>{
@@ -675,6 +711,7 @@ $("#plazoForm").addEventListener("submit",e=>{
   });
   run(()=>b.commit(),"Plazo guardado"+(n?" y aplicado a "+n+" entrenos próximos":"")).then(()=>document.activeElement?.blur());
 });
+["#tcColP","#tcColA"].forEach(id=>$(id)?.addEventListener("input",()=>aplicarColores({p:$("#tcColP").value,a:$("#tcColA").value})));
 $("#tcFri").addEventListener("change",e=>run(()=>F.updateDoc(teamRef(),{viernes:e.target.checked}),e.target.checked?"Recordatorio activado para todo el equipo":"Recordatorio desactivado"));
 $("#tcFile").addEventListener("change",e=>{ const f=e.target.files?.[0]; if(f) setCrest(f); e.target.value=""; });
 $("#pagoForm").addEventListener("submit",e=>{
@@ -844,13 +881,19 @@ const recargoTxt = pg => pg.tipo==="fijo" ? `un recargo de ${eur(pg.fijo)}` : `u
 // Mes en que hay que pagar una multa: el de la multa, salvo las de la última semana, que pasan al siguiente
 function mesCobro(fecha){ const d=new Date((fecha||today())+"T12:00"); d.setDate(d.getDate()+7); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
 function finDeMes(ym){ const [y,m]=ym.split("-").map(Number); return new Date(y,m,0); }
+const prorrogaDe=p=>{ const r=p?.prorroga; return r&&r.hasta&&r.hasta>=today()?r:null; };
+const fechaLarga=ymd=>new Date(ymd+"T12:00").toLocaleDateString(LOC,{day:"numeric",month:"long"});
+function sinContestarAviso(me){ const pl=plazoCfg(); const n=+me.sinContestar||0; if(!pl.activo||pl.cada<2||!n) return "";
+  return `<p class="note" style="color:var(--orange);font-weight:600">⚠️ Llevas ${n} de ${pl.cada} entrenos sin contestar. Al llegar a ${pl.cada} hay multa.</p>`; }
 function pagoAviso(me){
   const pg=pagosCfg(); if(!pg.activo) return "";
+  const pr=prorrogaDe(me);
   const pend=S.multas.filter(m=>m.jugador===me.id && !m.pagada);
   if(!pend.length) return "";
   const ym=today().slice(0,7);
   const ahora=pend.filter(m=>mesCobro(m.fecha)<=ym); const tot=ahora.reduce((a,m)=>a+(+m.importe||0),0);
   if(!tot) return `<p class="note">💶 Tienes multas del final de mes: se pagan el mes que viene.</p>`;
+  if(pr) return `<p class="note" style="color:var(--ok);font-weight:600">⏳ Tienes hasta el ${esc(fechaLarga(pr.hasta))} para pagar ${eur(tot)} sin recargo.</p>`;
   const fin=finDeMes(ym).toLocaleDateString(LOC,{day:"numeric",month:"long"});
   return `<p class="note" style="color:var(--orange);font-weight:600">💶 Paga ${eur(tot)} antes del ${esc(fin)} o se aplicará ${recargoTxt(pg)} (${eur(recargoDe(pg,tot))}).</p>`;
 }
@@ -1393,6 +1436,9 @@ $("#gastoForm").addEventListener("submit",e=>{
 });
 
 // Pagos del mes (para quien cobra)
+// Por defecto, 15 días más (o el día 15 del mes que viene si es más tarde)
+function prorrogaDefecto(){ const d=new Date(); const a=new Date(d.getTime()+15*864e5), b=new Date(d.getFullYear(),d.getMonth()+1,15); const x=a>b?a:b; return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); }
+function mesProrroga(){ const d=new Date(); if(d.getDate()<=3) d.setDate(0); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
 function renderPagos(){
   const card=$("#pagosCard"); if(!card) return;
   card.hidden=!S.canWrite;
@@ -1402,8 +1448,9 @@ function renderPagos(){
     return {p, total:pend.reduce((a,m)=>a+(+m.importe||0),0), ahora:ahora.reduce((a,m)=>a+(+m.importe||0),0)}; }).sort((a,b)=>b.total-a.total||sortPlayers(a.p,b.p));
   const deben=rows.filter(r=>r.total>0);
   $("#pagosRes").textContent = deben.length ? `${deben.length} deben · ${eur(deben.reduce((a,r)=>a+r.total,0))}` : "Todos al día ✅";
-  $("#pagosList").innerHTML = rows.map(r=>`<div class="pg"><span class="av ${hasDor(r.p)?"num":""}">${esc(avTxt(r.p))}</span><span><b>${esc(r.p.nombre)}</b><br><span class="mini">${r.total>0?`Debe ${eur(r.total)}${r.ahora<r.total?` (${eur(r.ahora)} de este mes)`:""}`:"Al día ✅"}</span></span>
-    <span class="acc">${r.total>0?`<button type="button" class="btn small ghost" data-recpago="${esc(r.p.id)}|${r.total}" ${r.p.email?"":"disabled title=\"No tiene cuenta\""}>🔔 Recordar</button><button type="button" class="btn small ok" data-payall="${esc(r.p.id)}">Cobrar</button>`:""}</span></div>`).join("");
+  $("#pagosList").innerHTML = rows.map(r=>`<div class="pg"><span class="av ${hasDor(r.p)?"num":""}">${esc(avTxt(r.p))}</span><span><b>${esc(r.p.nombre)}</b><br><span class="mini">${r.total>0?`Debe ${eur(r.total)}${r.ahora<r.total?` (${eur(r.ahora)} de este mes)`:""}`:"Al día ✅"}${prorrogaDe(r.p)?` · ⏳ hasta el ${esc(fechaLarga(r.p.prorroga.hasta))}`:""}${+r.p.sinContestar?` · ⚠️ ${+r.p.sinContestar} sin contestar`:""}</span></span>
+    <span class="acc">${r.total>0?`<button type="button" class="btn small ghost" data-recpago="${esc(r.p.id)}|${r.total}" ${r.p.email?"":"disabled title=\"No tiene cuenta\""}>🔔 Recordar</button><button type="button" class="btn small ghost" data-prorroga="${esc(r.p.id)}">⏳ Más tiempo</button><button type="button" class="btn small ok" data-payall="${esc(r.p.id)}">Cobrar</button>`:""}</span></div>
+    ${S.prEdit===r.p.id?`<div class="inl prbox"><label class="f">Puede pagar sin recargo hasta el<input type="date" id="prFecha" min="${today()}" value="${esc(prorrogaDe(r.p)?.hasta||prorrogaDefecto())}"></label><button type="button" class="btn small" data-prsave="${esc(r.p.id)}">Guardar</button>${prorrogaDe(r.p)?`<button type="button" class="btn small ghost" data-prquitar="${esc(r.p.id)}">Quitar</button>`:""}</div>`:""}`).join("");
 }
 // Registro de cambios
 function renderLog(){
@@ -1811,8 +1858,8 @@ function traducir(root=document.body){
 }
 // Frases que cambian (números, nombres, fechas)
 const I18N_RE={
-  va:[[/^Debe (.+)$/,m=>"Deu "+m[1]],[/^Contesta antes de (.+)$/,m=>"Contesta abans de "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" multa":" multes")],[/^(\d+) jugadores$/,m=>m[1]+" jugadors"],[/^Jornada (\d+)$/,m=>"Jornada "+m[1]],[/^Guardado$/,()=>"Guardat"],[/^Hecho$/,()=>"Fet"],[/^Sin conexión.*$/,()=>"Sense connexió"],[/^(\d+) van?$/,m=>m[1]+" van"],[/^(\d+) no van?$/,m=>m[1]+" no van"],[/^Paso (\d+) de (\d+)$/,m=>`Pas ${m[1]} de ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Jugada guardada (${m[1]} ${m[1]==="1"?"pas":"passos"})`],[/^Jugada: (.+)$/,m=>"Jugada: "+m[1]],[/^Última: (.+)$/,m=>"Última: "+m[1]],[/^Foto del paso (\d+)$/,m=>"Foto del pas "+m[1]],[/^Foto añadida al paso (\d+)\. Coloca las fichas encima$/,m=>`Foto afegida al pas ${m[1]}. Col·loca les fitxes damunt`],[/^Paso (\d+) con la foto del vídeo$/,m=>`Pas ${m[1]} amb la foto del vídeo`],[/^Vídeo partido en (\d+) pasos\. Coloca las fichas en cada uno$/,m=>`Vídeo partit en ${m[1]} passos. Col·loca les fitxes en cada un`],[/^(\d+) más$/,m=>m[1]+" més"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" jugada":" jugades")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Atac","Saque de banda":"Fora de banda","Saque de fondo":"Fora de fons","Contraataque":"Contraatac","Otra":"Altra"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" pas":" passos")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" pas":" passos")+(m[2]||"")]],
-  en:[[/^Debe (.+)$/,m=>"Owes "+m[1]],[/^Contesta antes de (.+)$/,m=>"Answer before "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" fine":" fines")],[/^(\d+) jugadores$/,m=>m[1]+" players"],[/^Jornada (\d+)$/,m=>"Round "+m[1]],[/^Guardado$/,()=>"Saved"],[/^Hecho$/,()=>"Done"],[/^Sin conexión.*$/,()=>"Offline"],[/^(\d+) van?$/,m=>m[1]+" going"],[/^(\d+) no van?$/,m=>m[1]+" not going"],[/^Paso (\d+) de (\d+)$/,m=>`Step ${m[1]} of ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Play saved (${m[1]} ${m[1]==="1"?"step":"steps"})`],[/^Jugada: (.+)$/,m=>"Play: "+m[1]],[/^Última: (.+)$/,m=>"Last: "+m[1]],[/^Foto del paso (\d+)$/,m=>"Step "+m[1]+" photo"],[/^Foto añadida al paso (\d+)\. Coloca las fichas encima$/,m=>`Photo added to step ${m[1]}. Place the pieces on top`],[/^Paso (\d+) con la foto del vídeo$/,m=>`Step ${m[1]} with the video frame`],[/^Vídeo partido en (\d+) pasos\. Coloca las fichas en cada uno$/,m=>`Video split into ${m[1]} steps. Place the pieces on each`],[/^(\d+) más$/,m=>m[1]+" more"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" play":" plays")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Offense","Defensa":"Defense","Saque de banda":"Sideline inbound","Saque de fondo":"Baseline inbound","Contraataque":"Fast break","Otra":"Other"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" step":" steps")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" step":" steps")+(m[2]||"")]]
+  va:[[/^Debe (.+)$/,m=>"Deu "+m[1]],[/^Contesta antes de (.+)$/,m=>"Contesta abans de "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" multa":" multes")],[/^(\d+) jugadores$/,m=>m[1]+" jugadors"],[/^Jornada (\d+)$/,m=>"Jornada "+m[1]],[/^Guardado$/,()=>"Guardat"],[/^Hecho$/,()=>"Fet"],[/^Sin conexión.*$/,()=>"Sense connexió"],[/^(\d+) van?$/,m=>m[1]+" van"],[/^(\d+) no van?$/,m=>m[1]+" no van"],[/^Paso (\d+) de (\d+)$/,m=>`Pas ${m[1]} de ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Jugada guardada (${m[1]} ${m[1]==="1"?"pas":"passos"})`],[/^Jugada: (.+)$/,m=>"Jugada: "+m[1]],[/^Última: (.+)$/,m=>"Última: "+m[1]],[/^Tienes hasta el (.+) para pagar (.+) sin recargo\.$/,m=>`Tens fins al ${m[1]} per a pagar ${m[2]} sense recàrrec.`],[/^Llevas (\d+) de (\d+) entrenos sin contestar\. Al llegar a (\d+) hay multa\.$/,m=>`Portes ${m[1]} de ${m[2]} entrenaments sense contestar. En arribar a ${m[3]} hi ha multa.`],[/^Foto del paso (\d+)$/,m=>"Foto del pas "+m[1]],[/^Foto añadida al paso (\d+)\. Coloca las fichas encima$/,m=>`Foto afegida al pas ${m[1]}. Col·loca les fitxes damunt`],[/^Paso (\d+) con la foto del vídeo$/,m=>`Pas ${m[1]} amb la foto del vídeo`],[/^Vídeo partido en (\d+) pasos\. Coloca las fichas en cada uno$/,m=>`Vídeo partit en ${m[1]} passos. Col·loca les fitxes en cada un`],[/^(\d+) más$/,m=>m[1]+" més"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" jugada":" jugades")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Atac","Saque de banda":"Fora de banda","Saque de fondo":"Fora de fons","Contraataque":"Contraatac","Otra":"Altra"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" pas":" passos")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" pas":" passos")+(m[2]||"")]],
+  en:[[/^Debe (.+)$/,m=>"Owes "+m[1]],[/^Contesta antes de (.+)$/,m=>"Answer before "+m[1]],[/^(\d+) multas?$/,m=>m[1]+(m[1]==="1"?" fine":" fines")],[/^(\d+) jugadores$/,m=>m[1]+" players"],[/^Jornada (\d+)$/,m=>"Round "+m[1]],[/^Guardado$/,()=>"Saved"],[/^Hecho$/,()=>"Done"],[/^Sin conexión.*$/,()=>"Offline"],[/^(\d+) van?$/,m=>m[1]+" going"],[/^(\d+) no van?$/,m=>m[1]+" not going"],[/^Paso (\d+) de (\d+)$/,m=>`Step ${m[1]} of ${m[2]}`],[/^Jugada guardada \((\d+) pasos?\)$/,m=>`Play saved (${m[1]} ${m[1]==="1"?"step":"steps"})`],[/^Jugada: (.+)$/,m=>"Play: "+m[1]],[/^Última: (.+)$/,m=>"Last: "+m[1]],[/^Tienes hasta el (.+) para pagar (.+) sin recargo\.$/,m=>`You have until ${m[1]} to pay ${m[2]} without surcharge.`],[/^Llevas (\d+) de (\d+) entrenos sin contestar\. Al llegar a (\d+) hay multa\.$/,m=>`You have missed ${m[1]} of ${m[2]} practice replies. At ${m[3]} you get a fine.`],[/^Foto del paso (\d+)$/,m=>"Step "+m[1]+" photo"],[/^Foto añadida al paso (\d+)\. Coloca las fichas encima$/,m=>`Photo added to step ${m[1]}. Place the pieces on top`],[/^Paso (\d+) con la foto del vídeo$/,m=>`Step ${m[1]} with the video frame`],[/^Vídeo partido en (\d+) pasos\. Coloca las fichas en cada uno$/,m=>`Video split into ${m[1]} steps. Place the pieces on each`],[/^(\d+) más$/,m=>m[1]+" more"],[/^(\d+) jugadas?$/,m=>m[1]+(m[1]==="1"?" play":" plays")],[/^(.+?) · (\d+) pasos?( · .+)?$/,m=>(({"Ataque":"Offense","Defensa":"Defense","Saque de banda":"Sideline inbound","Saque de fondo":"Baseline inbound","Contraataque":"Fast break","Otra":"Other"})[m[1]]||m[1])+" · "+m[2]+(m[2]==="1"?" step":" steps")+(m[3]||"")],[/^(\d+) pasos?( · .*)?$/,m=>m[1]+(m[1]==="1"?" step":" steps")+(m[2]||"")]]
 };
 const obsI18n=new MutationObserver(ms=>{ if(traducir&&!traduciendo&&lang!=="es") ms.forEach(m=>{ if(m.type==="characterData") traducir(m.target); else m.addedNodes.forEach(nd=>{ if(nd.nodeType===1||nd.nodeType===3) traducir(nd); }); }); });
 obsI18n.observe(document.body,{childList:true,subtree:true,characterData:true});
@@ -1831,6 +1878,13 @@ function handleTanda2(t,d){
     i.value=""; i.blur();
     run(()=>F.addDoc(F.collection(db,"equipos",TEAM,"rivales",ev.rival,"notas"),{jugador:"", partido:ev.id, texto:("Tras el partido del "+new Date(ev.fecha+"T12:00").toLocaleDateString(LOC,{day:"numeric",month:"short"})+": "+v).slice(0,500), autor:email(), nombre:myName(), creado:Date.now(), notificada:false}),"Nota guardada en el scouting del rival"); return true; }
   if(d.pzmodo){ PZ.modo=d.pzmodo; document.querySelectorAll("[data-pzmodo]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.pzmodo===PZ.modo)); return true; }
+  if(d.colp){ $("#tcColP").value=d.colp; $("#tcColA").value=d.cola; aplicarColores({p:d.colp,a:d.cola}); document.querySelectorAll(".swatch").forEach(b=>b.setAttribute("aria-pressed",b===t)); return true; }
+  if(t.id==="tcColSave"){ const c={p:$("#tcColP").value,a:$("#tcColA").value}; run(()=>F.updateDoc(teamRef(),{colores:c}),"Colores guardados para todo el equipo"); return true; }
+  if(t.id==="tcColReset"){ run(()=>F.updateDoc(teamRef(),{colores:F.deleteField()}),"Colores originales"); return true; }
+  if(d.prorroga){ S.prEdit=S.prEdit===d.prorroga?null:d.prorroga; renderPagos(); return true; }
+  if(d.prsave){ const f=$("#prFecha")?.value; if(!f||f<today()){ toast("Elige una fecha a partir de hoy"); return true; } const p=playerById(d.prsave);
+    run(()=>F.updateDoc(dref("jugadores",d.prsave),{prorroga:{hasta:f, mes:mesProrroga(), dada:Date.now(), notificada:false}}),`${shortName(p?.nombre)} puede pagar sin recargo hasta el ${fechaLarga(f)}`).then(()=>{ S.prEdit=null; renderPagos(); }); return true; }
+  if(d.prquitar){ run(()=>F.updateDoc(dref("jugadores",d.prquitar),{prorroga:F.deleteField()}),"Prórroga quitada").then(()=>{ S.prEdit=null; renderPagos(); }); return true; }
   if(t.id==="fbcvHecho"){ const hoy=new Date(); const ymd=hoy.getFullYear()+"-"+String(hoy.getMonth()+1).padStart(2,"0")+"-"+String(hoy.getDate()).padStart(2,"0");
     run(()=>F.updateDoc(F.doc(db,"equipos",LEGACY_TEAM),{fbcvRenovado:ymd}),"Hecho. No te llegarán más recordatorios esta semana").then(()=>fbcvFecha()); return true; }
   if(t.id==="pzDeshacer"){ if(PZ.anim) return true; pzCur().trazos.pop(); pzDraw(); return true; }
@@ -1895,6 +1949,7 @@ function subscribe(){
       toast("No existe ningún equipo con el código "+TEAM); leaveTeam(); return;
     }
     S.aj=Object.assign({nombre:"",inicio:"",contador:"",admins:[],escudo:"",viernes:false}, s.data());
+    aplicarColores(S.aj.colores); store.set("multas.colores."+TEAM, S.aj.colores||null);
     setTimeout(fanSync,0);
     rememberTeam(TEAM, S.aj.nombre);
     if(!S.aj.propietario && S.aj.creador && S.user && S.user.uid===S.aj.creador && email() && !S.ownerClaimed){
